@@ -175,9 +175,10 @@ static void got_ip_event_handler(void *arg, esp_event_base_t event_base,
     OPC_KLIENT_DEBUG(TAG, "\n~~~~~~~~~~~\n");
 }
 
+// moje uprava kodu start
+
 void connection_scan()
 {
-
     OPC_KLIENT_DEBUG(TAG, "Nastavuji Ethernet\n");
     // ESP Ethernet inicializace
     uint8_t eth_port_cnt = 0;
@@ -190,15 +191,27 @@ void connection_scan()
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
     // Create instance(s) of esp-netif for Ethernet(s)
-    // Use ESP_NETIF_DEFAULT_ETH when just one Ethernet interface is used and you don't need to modify
-    // default esp-netif configuration parameters.
-
     esp_netif_config_t cfg = ESP_NETIF_DEFAULT_ETH();
     esp_netif_t *eth_netif = esp_netif_new(&cfg);
+
     // Attach Ethernet driver to TCP/IP stack
     ESP_ERROR_CHECK(esp_netif_attach(eth_netif, esp_eth_new_netif_glue(eth_handles[0])));
 
-    // Register user defined event handers
+    // ✱✱✱ STATICKÁ IP – HLAVNÍ ÚPRAVA ✱✱✱
+    esp_err_t err = esp_netif_dhcpc_stop(eth_netif);
+    if (err != ESP_OK && err != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED) {
+        OPC_KLIENT_DEBUG(TAG, "Nemuzu zastavit DHCP klienta: %s\n", esp_err_to_name(err));
+    }
+
+    esp_netif_ip_info_t ip_info;
+    IP4_ADDR(&ip_info.ip,      192, 168, 0, 10);  // IP čtečky
+    IP4_ADDR(&ip_info.gw,      192, 168, 0, 1);   // gateway (IP PLC nebo klidně 0.0.0.0)
+    IP4_ADDR(&ip_info.netmask, 255, 255, 255, 0); // maska
+
+    ESP_ERROR_CHECK(esp_netif_set_ip_info(eth_netif, &ip_info));
+    OPC_KLIENT_DEBUG(TAG, "Nastavuji statickou IP: 192.168.0.10\n");
+
+    // Register user defined event handlers
     ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, &eth_event_handler, NULL));
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, &got_ip_event_handler, NULL));
 
@@ -207,43 +220,63 @@ void connection_scan()
     {
         ESP_ERROR_CHECK(esp_eth_start(eth_handles[i]));
     }
+
     // Start opc handler
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, &opc_event_handler, NULL));
 }
 
+
 bool ClientStart(UA_Client **iManagement_client, const char *IPAdress)
 {
-    int Pocet = 1;
     OPC_KLIENT_DEBUG(TAG, "Start OPC Klient\n");
+
+    /* Složení úplného endpoint URL pro open62541:
+       IPAdress = "192.168.0.1:4840"
+       endpoint = "opc.tcp://192.168.0.1:4840"
+    */
+    char endpointUrl[128];
+    snprintf(endpointUrl, sizeof(endpointUrl), "opc.tcp://%s", IPAdress);
+    OPC_KLIENT_DEBUG(TAG, "Pokus o pripojeni na OPC UA server: %s\n", endpointUrl);
+
+    int Pocet = 1;
+
     while (Pocet > 0)
     {
         UA_ClientConfig config = UA_ClientConfig_default;
-        config.timeout = 1000;
+        config.timeout = 1000;  // 1 s timeout
         *iManagement_client = UA_Client_new(config);
 
-        // set the configuration for the client
-
-        // connect and delete the client in case of failure
-
-        UA_StatusCode retval = UA_Client_connect(*iManagement_client, IPAdress);
+        UA_StatusCode retval = UA_Client_connect(*iManagement_client, endpointUrl);
 
         if (retval != UA_STATUSCODE_GOOD)
         {
-            UA_LOG_ERROR(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND,
-                         "Not connected. Retrying to connect in 1 second");
+            OPC_KLIENT_DEBUG(TAG,
+                             "OPC UA connect failed (0x%08x), pokus %d\n",
+                             retval, Pocet);
+
+            UA_Client_delete(*iManagement_client);
+            *iManagement_client = NULL;
+
             ++Pocet;
             if (Pocet > 5)
             {
+                OPC_KLIENT_DEBUG(TAG,
+                                 "OPC UA se nepodarilo pripojit ani po 5 pokusech, koncim.\n");
                 return false;
             }
+
+            vTaskDelay(1000 / portTICK_PERIOD_MS);  // 1 s pauza
             continue;
         }
-        OPC_KLIENT_DEBUG(TAG, "Klient pripojen\n");
+
+        OPC_KLIENT_DEBUG(TAG, "OPC UA klient pripojen.\n");
         return true;
     }
+
     return false;
 }
 
+// moje uprava kodu stop
 uint8_t Inquire(CellInfo aCellInfo, uint16_t IDInterpreter, uint8_t TypeOfProcess, UA_Boolean priority, uint8_t param1, uint16_t param2, Reservation *aRezervace)
 {
     OPC_KLIENT_ALL_DEBUG(TAG, "Start OPC Klient\n");

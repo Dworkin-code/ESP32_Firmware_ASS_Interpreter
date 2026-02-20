@@ -756,6 +756,50 @@ void Is_Card_On_Reader(void *pvParameter)
   }
 }
 
+//moje uprava start
+void OPC_Permanent_Test(void *pvParameter)
+{
+  TaskParams *Parametry = (TaskParams *)pvParameter;
+
+  while (true)
+  {
+    if (xSemaphoreTake(Parametry->xEthernet, (TickType_t)10000) == pdTRUE)
+    {
+      UA_Client *client = NULL;
+      bool ok = ClientStart(&client, MyCellInfo.IPAdress);
+
+      if (ok && client != NULL)
+      {
+        printf("OPC_TEST: Pripojeni na %s USPELO.\n", MyCellInfo.IPAdress);
+        /* případně jednoduchý dotaz na server by šel sem */
+        UA_Client_disconnect(client);
+        UA_Client_delete(client);
+        client = NULL;
+      }
+      else
+      {
+        printf("OPC_TEST: Pripojeni na %s SELHALO.\n", MyCellInfo.IPAdress);
+        if (client != NULL)
+        {
+          UA_Client_delete(client);
+          client = NULL;
+        }
+      }
+
+      xSemaphoreGive(Parametry->xEthernet);
+    }
+    else
+    {
+      printf("OPC_TEST: Nelze ziskat semafor k Ethernetu.\n");
+    }
+
+    // pauza mezi pokusy (5 s)
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
+  }
+}
+
+//moje uprava stop
+
 void app_main()
 {
   uint8_t processTypes1[] = {0, 1, 2};
@@ -778,8 +822,8 @@ void app_main()
   nvs_close(nvs_handle);
   printf("ID_Of_Interpretter: %d\n", MyCellInfo.IDofCell);
 
-  MyCellInfo.IPAdress = "10.0.0.39:20000\0";
-  MyCellInfo.IPAdressLenght = 16;
+  MyCellInfo.IPAdress = "192.168.0.1:4840";
+  MyCellInfo.IPAdressLenght = strlen(MyCellInfo.IPAdress);
   MyCellInfo.ProcessTypes = processTypes1;
   MyCellInfo.ProcessTypesLenght = 3;
 
@@ -801,11 +845,27 @@ void app_main()
 
     xSemaphoreGive(Parametry.xEthernet);
   }
-  while (!CasNastaven)
-  {
-    printf("Cekam na ziskani casu a ethernetu.\n");
+// moje upravda kodu start
+
+ int retries = 0;
+while (!CasNastaven && retries < 5) 
+{
+    printf("Cekam na ziskani casu (pokus %d)\n", retries);
+    retries++;
     vTaskDelay(1000 / portTICK_PERIOD_MS);
-  }
+}
+
+if (!CasNastaven) {
+    printf("Cas se neziskal, pokracuju dale bez casu.\n");
+    CasNastaven = true;  // odblokovani stavu
+} else {
+    printf("Cas ziskan, pokracuju dale.\n");
+}
+// moje upravda kodu stop
+
+// moje upravda kodu start
+ xTaskCreate(&OPC_Permanent_Test, "OPC_Test", 4096, (void *)&Parametry, 6, NULL);
+// moje upravda kodu stop
   esp_err_t err = mdns_init();
   if (err)
   {
