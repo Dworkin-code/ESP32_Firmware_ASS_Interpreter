@@ -1,0 +1,524 @@
+{
+  "opcua_config": {
+    "namespace_uri": "opc.tcp://192.168.0.1",
+    "namespace_version": "1.00",
+    "namespace_publication_date": "2022-03-16T00:00:00Z",
+    "endpoint": "opc.tcp://192.168.0.1",
+    "security_policies": [],
+    "message_modes": []
+  },
+  "namespaces": [
+    {
+      "index": 0,
+      "uri": "opc.tcp://192.168.0.1"
+    }
+  ],
+  "published_nodes": [
+    {
+      "node_id": "ns=1;i=6100",
+      "browse_name": "1:ActionStatus",
+      "display_name": "ActionStatus",
+      "data_type": "String",
+      "access_level": "ReadWrite",
+      "plc_data_block": "PassiveAAS_DB",
+      "plc_variable": "ActionStatus",
+      "plc_full_path": "\"PassiveAAS_DB\".\"ActionStatus\"",
+      "opcua_browse_path": "PLCServiceProvider/Variables/Dynamic/ActionStatus",
+      "category": "Dynamic"
+    },
+    {
+      "node_id": "ns=1;i=6101",
+      "browse_name": "1:CurrentId",
+      "display_name": "CurrentId",
+      "data_type": "String",
+      "access_level": "ReadWrite",
+      "plc_data_block": "PassiveAAS_DB",
+      "plc_variable": "CurrentId",
+      "plc_full_path": "\"PassiveAAS_DB\".\"CurrentId\"",
+      "opcua_browse_path": "PLCServiceProvider/Variables/Dynamic/CurrentId",
+      "category": "Dynamic"
+    },
+    {
+      "node_id": "ns=1;i=6102",
+      "browse_name": "1:CurrentPosition",
+      "display_name": "CurrentPosition",
+      "data_type": "String",
+      "access_level": "ReadWrite",
+      "plc_data_block": "PassiveAAS_DB",
+      "plc_variable": "CurrentIdPosition",
+      "plc_full_path": "\"PassiveAAS_DB\".\"CurrentIdPosition\"",
+      "opcua_browse_path": "PLCServiceProvider/Variables/Dynamic/CurrentPosition",
+      "category": "Dynamic"
+    },
+    {
+      "node_id": "ns=1;i=6103",
+      "browse_name": "1:ItemCountP",
+      "display_name": "ItemCountP",
+      "data_type": "String",
+      "access_level": "ReadWrite",
+      "plc_data_block": "PassiveAAS_DB",
+      "plc_variable": "ItemCountP",
+      "plc_full_path": "\"PassiveAAS_DB\".\"ItemCountP\"",
+      "opcua_browse_path": "PLCServiceProvider/Variables/Dynamic/ItemCountP",
+      "category": "Dynamic"
+    },
+    {
+      "node_id": "ns=1;i=6104",
+      "browse_name": "1:ItemCountRP",
+      "display_name": "ItemCountRP",
+      "data_type": "String",
+      "access_level": "ReadWrite",
+      "plc_data_block": "PassiveAAS_DB",
+      "plc_variable": "ItemCountRP",
+      "plc_full_path": "\"PassiveAAS_DB\".\"ItemCountRP\"",
+      "opcua_browse_path": "PLCServiceProvider/Variables/Dynamic/ItemCountRP",
+      "category": "Dynamic"
+    },
+    {
+      "node_id": "ns=1;i=6105",
+      "browse_name": "1:OutputPositionSr",
+      "display_name": "OutputPositionSr",
+      "data_type": "String",
+      "access_level": "ReadWrite",
+      "plc_data_block": "PassiveAAS_DB",
+      "plc_variable": "OutputPositionSr",
+      "plc_full_path": "\"PassiveAAS_DB\".\"OutputPositionSr\"",
+      "opcua_browse_path": "PLCServiceProvider/Variables/Dynamic/OutputPositionSr",
+      "category": "Dynamic"
+    },
+    {
+      "node_id": "ns=1;i=6106",
+      "browse_name": "1:QueueHistoryBuffer",
+      "display_name": "QueueHistoryBuffer",
+      "data_type": "String",
+      "access_level": "ReadWrite",
+      "plc_data_block": "PassiveAAS_DB",
+      "plc_variable": "QueueHistoryStatus",
+      "plc_full_path": "\"PassiveAAS_DB\".\"QueueHistoryStatus\"",
+      "opcua_browse_path": "PLCServiceProvider/Variables/Dynamic/QueueHistoryBuffer",
+      "category": "Dynamic"
+    },
+    {
+      "node_id": "ns=1;i=6107",
+      "browse_name": "1:QueueStatus",
+      "display_name": "QueueStatus",
+      "data_type": "String",
+      "access_level": "ReadWrite",
+      "plc_data_block": "PassiveAAS_DB",
+      "plc_variable": "QueueStatus",
+      "plc_full_path": "\"PassiveAAS_DB\".\"QueueStatus\"",
+      "opcua_browse_path": "PLCServiceProvider/Variables/Dynamic/QueueStatus",
+      "category": "Dynamic"
+    },
+    {
+      "node_id": "ns=1;i=6200",
+      "browse_name": "1:ID",
+      "display_name": "ID",
+      "data_type": "String",
+      "access_level": "ReadWrite",
+      "plc_data_block": "PassiveAAS_DB",
+      "plc_variable": "ID",
+      "plc_full_path": "\"PassiveAAS_DB\".\"ID\"",
+      "opcua_browse_path": "PLCServiceProvider/Variables/Static/ID",
+      "category": "Static"
+    },
+    {
+      "node_id": "ns=1;i=6201",
+      "browse_name": "1:InputPosition",
+      "display_name": "InputPosition",
+      "data_type": "String",
+      "access_level": "ReadWrite",
+      "plc_data_block": "PassiveAAS_DB",
+      "plc_variable": "InputPosition",
+      "plc_full_path": "\"PassiveAAS_DB\".\"InputPosition\"",
+      "opcua_browse_path": "PLCServiceProvider/Variables/Static/InputPosition",
+      "category": "Static"
+    },
+    {
+      "node_id": "ns=1;i=6202",
+      "browse_name": "1:Name",
+      "display_name": "Name",
+      "data_type": "String",
+      "access_level": "ReadWrite",
+      "plc_data_block": "PassiveAAS_DB",
+      "plc_variable": "Name",
+      "plc_full_path": "\"PassiveAAS_DB\".\"Name\"",
+      "opcua_browse_path": "PLCServiceProvider/Variables/Static/Name",
+      "category": "Static"
+    },
+    {
+      "node_id": "ns=1;i=6203",
+      "browse_name": "1:OutputPosition",
+      "display_name": "OutputPosition",
+      "data_type": "String",
+      "access_level": "ReadWrite",
+      "plc_data_block": "PassiveAAS_DB",
+      "plc_variable": "OutputPosition",
+      "plc_full_path": "\"PassiveAAS_DB\".\"OutputPosition\"",
+      "opcua_browse_path": "PLCServiceProvider/Variables/Static/OutputPosition",
+      "category": "Static"
+    },
+    {
+      "node_id": "ns=1;i=6204",
+      "browse_name": "1:Submodel",
+      "display_name": "Submodel",
+      "data_type": "String",
+      "access_level": "ReadWrite",
+      "plc_data_block": "PassiveAAS_DB",
+      "plc_variable": "Submodel",
+      "plc_full_path": "\"PassiveAAS_DB\".\"Submodel\"",
+      "opcua_browse_path": "PLCServiceProvider/Variables/Static/Submodel",
+      "category": "Static"
+    },
+    {
+      "node_id": "ns=1;i=6205",
+      "browse_name": "1:TotalMaxBuffer",
+      "display_name": "TotalMaxBuffer",
+      "data_type": "String",
+      "access_level": "ReadWrite",
+      "plc_data_block": "PassiveAAS_DB",
+      "plc_variable": "TotalMaximumBuffer",
+      "plc_full_path": "\"PassiveAAS_DB\".\"TotalMaximumBuffer\"",
+      "opcua_browse_path": "PLCServiceProvider/Variables/Static/TotalMaxBuffer",
+      "category": "Static"
+    }
+  ],
+  "methods": [
+    {
+      "node_id": "ns=1;i=7000",
+      "browse_name": "1:FreeFromPosition",
+      "display_name": "FreeFromPosition",
+      "plc_mapping": "\"Active AAS_DB\".\"FreeFromPosition_Instance\".Method",
+      "input_arguments": [
+        {
+          "name": "InputMessage",
+          "data_type": "String",
+          "description": "The input argument of method FreeFromPosition."
+        }
+      ],
+      "output_arguments": [
+        {
+          "name": "OutputMessage",
+          "data_type": "String",
+          "description": "The output argument of method FreeFromPosition."
+        }
+      ]
+    },
+    {
+      "node_id": "ns=1;i=7001",
+      "browse_name": "1:FreeFromQueue",
+      "display_name": "FreeFromQueue",
+      "plc_mapping": "\"Active AAS_DB\".\"FreeFromQueue_Instance\".Method",
+      "input_arguments": [
+        {
+          "name": "InputMessage",
+          "data_type": "String",
+          "description": "The input argument of method FreeFromQueue."
+        }
+      ],
+      "output_arguments": [
+        {
+          "name": "OutputMessage",
+          "data_type": "String",
+          "description": "The output argument of method FreeFromQueue."
+        }
+      ]
+    },
+    {
+      "node_id": "ns=1;i=7002",
+      "browse_name": "1:GetStatus",
+      "display_name": "GetStatus",
+      "plc_mapping": "\"Active AAS_DB\".\"GetStatus_Instance\".Method",
+      "input_arguments": [
+        {
+          "name": "InputMessage",
+          "data_type": "String",
+          "description": "The input argument of method GetStatus."
+        }
+      ],
+      "output_arguments": [
+        {
+          "name": "OutputMessage",
+          "data_type": "String",
+          "description": "The output argument of method GetStatus."
+        }
+      ]
+    },
+    {
+      "node_id": "ns=1;i=7003",
+      "browse_name": "1:GetSupported",
+      "display_name": "GetSupported",
+      "plc_mapping": "\"Active AAS_DB\".\"GetSupported_Instance\".Method",
+      "input_arguments": [
+        {
+          "name": "InputMessage",
+          "data_type": "String",
+          "description": "The input argument of method GetSupported."
+        }
+      ],
+      "output_arguments": [
+        {
+          "name": "OutputMessage",
+          "data_type": "String",
+          "description": "The output argument of method GetSupported."
+        }
+      ]
+    },
+    {
+      "node_id": "ns=1;i=7004",
+      "browse_name": "1:ReportProduct",
+      "display_name": "ReportProduct",
+      "plc_mapping": "\"Active AAS_DB\".\"ReportProduct_Instance\".Method",
+      "input_arguments": [
+        {
+          "name": "InputMessage",
+          "data_type": "String",
+          "description": "The input argument of method ReportProduct."
+        }
+      ],
+      "output_arguments": [
+        {
+          "name": "OutputMessage",
+          "data_type": "String",
+          "description": "The output argument of method ReportProduct."
+        }
+      ]
+    },
+    {
+      "node_id": "ns=1;i=7005",
+      "browse_name": "1:ReserveAction",
+      "display_name": "ReserveAction",
+      "plc_mapping": "\"Active AAS_DB\".\"ReserveAction_Instance\".Method",
+      "input_arguments": [
+        {
+          "name": "InputMessage",
+          "data_type": "String",
+          "description": "The input argument of method ReserveAction."
+        }
+      ],
+      "output_arguments": [
+        {
+          "name": "OutputMessage",
+          "data_type": "String",
+          "description": "The output argument of method ReserveAction."
+        }
+      ]
+    }
+  ],
+  "udts": [],
+  "data_blocks": [
+    {
+      "name": "PassiveAAS_DB",
+      "type": "AAS",
+      "description": "Passive AAS Data Block containing static and dynamic variables"
+    },
+    {
+      "name": "Active AAS_DB",
+      "type": "AAS",
+      "description": "Active AAS Data Block containing method instances"
+    }
+  ],
+  "aas_detected": {
+    "cell": {
+      "variables": [
+        {
+          "node_id": "ns=1;i=6102",
+          "browse_name": "1:CurrentPosition",
+          "display_name": "CurrentPosition",
+          "plc_path": "\"PassiveAAS_DB\".\"CurrentIdPosition\"",
+          "data_type": "String",
+          "access_level": "ReadWrite"
+        },
+        {
+          "node_id": "ns=1;i=6105",
+          "browse_name": "1:OutputPositionSr",
+          "display_name": "OutputPositionSr",
+          "plc_path": "\"PassiveAAS_DB\".\"OutputPositionSr\"",
+          "data_type": "String",
+          "access_level": "ReadWrite"
+        },
+        {
+          "node_id": "ns=1;i=6106",
+          "browse_name": "1:QueueHistoryBuffer",
+          "display_name": "QueueHistoryBuffer",
+          "plc_path": "\"PassiveAAS_DB\".\"QueueHistoryStatus\"",
+          "data_type": "String",
+          "access_level": "ReadWrite"
+        },
+        {
+          "node_id": "ns=1;i=6107",
+          "browse_name": "1:QueueStatus",
+          "display_name": "QueueStatus",
+          "plc_path": "\"PassiveAAS_DB\".\"QueueStatus\"",
+          "data_type": "String",
+          "access_level": "ReadWrite"
+        },
+        {
+          "node_id": "ns=1;i=6201",
+          "browse_name": "1:InputPosition",
+          "display_name": "InputPosition",
+          "plc_path": "\"PassiveAAS_DB\".\"InputPosition\"",
+          "data_type": "String",
+          "access_level": "ReadWrite"
+        },
+        {
+          "node_id": "ns=1;i=6203",
+          "browse_name": "1:OutputPosition",
+          "display_name": "OutputPosition",
+          "plc_path": "\"PassiveAAS_DB\".\"OutputPosition\"",
+          "data_type": "String",
+          "access_level": "ReadWrite"
+        },
+        {
+          "node_id": "ns=1;i=6205",
+          "browse_name": "1:TotalMaxBuffer",
+          "display_name": "TotalMaxBuffer",
+          "plc_path": "\"PassiveAAS_DB\".\"TotalMaximumBuffer\"",
+          "data_type": "String",
+          "access_level": "ReadWrite"
+        }
+      ],
+      "methods": [
+        {
+          "node_id": "ns=1;i=7000",
+          "browse_name": "1:FreeFromPosition",
+          "display_name": "FreeFromPosition",
+          "plc_mapping": "\"Active AAS_DB\".\"FreeFromPosition_Instance\".Method"
+        },
+        {
+          "node_id": "ns=1;i=7001",
+          "browse_name": "1:FreeFromQueue",
+          "display_name": "FreeFromQueue",
+          "plc_mapping": "\"Active AAS_DB\".\"FreeFromQueue_Instance\".Method"
+        }
+      ]
+    },
+    "product": {
+      "core_variables": [
+        {
+          "node_id": "ns=1;i=6200",
+          "browse_name": "1:ID",
+          "display_name": "ID",
+          "plc_path": "\"PassiveAAS_DB\".\"ID\"",
+          "data_type": "String",
+          "access_level": "ReadWrite",
+          "description": "Product/Asset identifier"
+        },
+        {
+          "node_id": "ns=1;i=6101",
+          "browse_name": "1:CurrentId",
+          "display_name": "CurrentId",
+          "plc_path": "\"PassiveAAS_DB\".\"CurrentId\"",
+          "data_type": "String",
+          "access_level": "ReadWrite",
+          "description": "Current product ID in system"
+        },
+        {
+          "node_id": "ns=1;i=6202",
+          "browse_name": "1:Name",
+          "display_name": "Name",
+          "plc_path": "\"PassiveAAS_DB\".\"Name\"",
+          "data_type": "String",
+          "access_level": "ReadWrite",
+          "description": "Product name"
+        },
+        {
+          "node_id": "ns=1;i=6204",
+          "browse_name": "1:Submodel",
+          "display_name": "Submodel",
+          "plc_path": "\"PassiveAAS_DB\".\"Submodel\"",
+          "data_type": "String",
+          "access_level": "ReadWrite",
+          "description": "AAS Submodel reference"
+        }
+      ],
+      "methods": [
+        {
+          "node_id": "ns=1;i=7004",
+          "browse_name": "1:ReportProduct",
+          "display_name": "ReportProduct",
+          "plc_mapping": "\"Active AAS_DB\".\"ReportProduct_Instance\".Method",
+          "description": "Report product information"
+        }
+      ]
+    },
+    "transport": {
+      "variables": [
+        {
+          "node_id": "ns=1;i=6100",
+          "browse_name": "1:ActionStatus",
+          "display_name": "ActionStatus",
+          "plc_path": "\"PassiveAAS_DB\".\"ActionStatus\"",
+          "data_type": "String",
+          "access_level": "ReadWrite",
+          "description": "Transport action status"
+        }
+      ],
+      "methods": [
+        {
+          "node_id": "ns=1;i=7005",
+          "browse_name": "1:ReserveAction",
+          "display_name": "ReserveAction",
+          "plc_mapping": "\"Active AAS_DB\".\"ReserveAction_Instance\".Method",
+          "description": "Reserve transport action"
+        }
+      ]
+    }
+  },
+  "sync_interface": [
+    {
+      "node_id": "ns=1;i=6100",
+      "browse_name": "1:ActionStatus",
+      "display_name": "ActionStatus",
+      "plc_path": "\"PassiveAAS_DB\".\"ActionStatus\"",
+      "data_type": "String",
+      "writable": true,
+      "purpose": "Transport action status synchronization"
+    },
+    {
+      "node_id": "ns=1;i=6101",
+      "browse_name": "1:CurrentId",
+      "display_name": "CurrentId",
+      "plc_path": "\"PassiveAAS_DB\".\"CurrentId\"",
+      "data_type": "String",
+      "writable": true,
+      "purpose": "Product ID synchronization (NFC reader can write)"
+    },
+    {
+      "node_id": "ns=1;i=6102",
+      "browse_name": "1:CurrentPosition",
+      "display_name": "CurrentPosition",
+      "plc_path": "\"PassiveAAS_DB\".\"CurrentIdPosition\"",
+      "data_type": "String",
+      "writable": true,
+      "purpose": "Product position synchronization"
+    },
+    {
+      "node_id": "ns=1;i=6200",
+      "browse_name": "1:ID",
+      "display_name": "ID",
+      "plc_path": "\"PassiveAAS_DB\".\"ID\"",
+      "data_type": "String",
+      "writable": true,
+      "purpose": "Product identifier (can be set by NFC reader)"
+    },
+    {
+      "node_id": "ns=1;i=6202",
+      "browse_name": "1:Name",
+      "display_name": "Name",
+      "plc_path": "\"PassiveAAS_DB\".\"Name\"",
+      "data_type": "String",
+      "writable": true,
+      "purpose": "Product name synchronization"
+    },
+    {
+      "node_id": "ns=1;i=6204",
+      "browse_name": "1:Submodel",
+      "display_name": "Submodel",
+      "plc_path": "\"PassiveAAS_DB\".\"Submodel\"",
+      "data_type": "String",
+      "writable": true,
+      "purpose": "AAS Submodel reference synchronization"
+    }
+  ]
+}

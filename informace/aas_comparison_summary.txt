@@ -1,0 +1,417 @@
+================================================================================
+AAS STRUCTURE COMPARISON REPORT
+NFC Reader vs PLC AAS Implementation
+================================================================================
+Generated: 2026-02-20
+
+EXECUTIVE SUMMARY
+--------------------------------------------------------------------------------
+The NFC reader device is an OPC UA CLIENT that reads NFC tags and communicates
+with PLC servers. It does NOT implement an OPC UA server and therefore does NOT
+expose an AAS structure.
+
+The PLC implements a full OPC UA SERVER with a complete AAS structure including:
+- 14 published variables (Product ID, Current Position, Action Status, etc.)
+- 6 AAS methods (FreeFromPosition, FreeFromQueue, GetStatus, GetSupported,
+  ReportProduct, ReserveAction)
+
+KEY FINDING: The reader and PLC use DIFFERENT communication patterns:
+- Reader uses CUSTOM OPC UA methods (Inquire, Rezervation, DoProcess, etc.)
+- PLC exposes STANDARD AAS variables and methods
+- Reader does NOT directly access PLC AAS variables
+
+================================================================================
+1. ARCHITECTURAL DIFFERENCES
+================================================================================
+
+READER ARCHITECTURE:
+--------------------
+Type:              OPC UA Client (consumer only)
+OPC UA Server:     NO - Reader does not expose OPC UA server
+AAS Structure:     NO - Reader has no exposed AAS structure
+Data Storage:      NFC tags (TCardInfo, TRecipeInfo, TRecipeStep structures)
+Communication:     Custom OPC UA methods to PLCs
+
+PLC ARCHITECTURE:
+-----------------
+Type:              OPC UA Server (provider)
+OPC UA Server:     YES - Full server implementation
+AAS Structure:     YES - Complete AAS with variables and methods
+Data Storage:      PLC Data Blocks (PassiveAAS_DB, Active AAS_DB)
+Communication:     Standard AAS variables and methods exposed via OPC UA
+
+CRITICAL IMPLICATION:
+---------------------
+The reader cannot be directly compared to PLC AAS structure because it does not
+expose one. Instead, this comparison analyzes:
+1. Reader's internal data structures vs PLC AAS variables
+2. Reader's custom OPC UA client methods vs PLC AAS methods
+3. Data synchronization gaps between reader and PLC
+
+================================================================================
+2. MISSING ELEMENTS IN READER
+================================================================================
+
+2.1 OPC UA SERVER (CRITICAL)
+-----------------------------
+The reader does NOT implement an OPC UA server, which means:
+- No OPC UA namespace
+- No AAS variable nodes exposed
+- No AAS method nodes exposed
+- Cannot provide AAS structure to other systems
+
+Impact: Reader cannot participate as an AAS provider in the system.
+
+2.2 DIRECT VARIABLE ACCESS (HIGH SEVERITY)
+-------------------------------------------
+Reader does NOT directly read/write PLC AAS variables:
+
+MISSING SYNCHRONIZATION:
+- CurrentId (ns=1;i=6101): Reader reads Product ID from NFC tag UID but
+  does NOT write it to PLC CurrentId variable
+- CurrentPosition (ns=1;i=6102): Reader knows its cell ID but does NOT
+  write it to PLC CurrentPosition variable
+- ActionStatus (ns=1;i=6100): Reader tracks transport/process status on
+  NFC tag but does NOT sync to PLC ActionStatus variable
+- ID (ns=1;i=6200): Reader has TRecipeInfo.ID but does NOT sync to PLC
+- Name (ns=1;i=6202): Reader has no product name data
+- Submodel (ns=1;i=6204): Reader has no AAS submodel reference
+
+Impact: PLC cannot track product location, status, or identification
+        from reader data.
+
+2.3 PLC METHODS NOT USED (MEDIUM SEVERITY)
+-------------------------------------------
+Reader does NOT call these PLC AAS methods:
+- FreeFromPosition (ns=1;i=7000)
+- FreeFromQueue (ns=1;i=7001)
+- GetStatus (ns=1;i=7002) - Reader uses custom IsFinished instead
+- GetSupported (ns=1;i=7003)
+- ReportProduct (ns=1;i=7004)
+- ReserveAction (ns=1;i=7005) - Reader uses custom Rezervation instead
+
+Impact: Reader uses custom methods instead of standard AAS methods,
+        creating inconsistency.
+
+================================================================================
+3. EXTRA ELEMENTS IN READER
+================================================================================
+
+3.1 CUSTOM OPC UA METHODS
+--------------------------
+Reader uses custom OPC UA methods not present in PLC AAS:
+- Inquire: Query available cells for process type
+- IsValid: Validate reservation status
+- Rezervation: Custom reservation (different from PLC ReserveAction)
+- DoProcess: Start process execution
+- IsFinished: Check process completion (different from PLC GetStatus)
+- Occupancy: Report cell occupancy
+
+These are reader-specific methods called on PLC servers, but they are
+NOT part of the standard PLC AAS structure.
+
+3.2 INTERNAL DATA STRUCTURES
+----------------------------
+Reader has rich internal data structures stored on NFC tags:
+- TCardInfo: Complete NFC tag data
+- TRecipeInfo: Recipe metadata (ID, steps, budget, completion status)
+- TRecipeStep[]: Array of recipe steps with process/transport details
+- CellInfo: Cell configuration and capabilities
+
+These structures are NOT exposed via OPC UA - they exist only in
+reader's internal memory and on NFC tags.
+
+================================================================================
+4. DATATYPE MISMATCHES
+================================================================================
+
+4.1 PRODUCT IDENTIFICATION (HIGH SEVERITY)
+------------------------------------------
+Reader:  uint8_t[7] (NFC UID array)
+PLC:     String
+Node:    ns=1;i=6101 (CurrentId) or ns=1;i=6200 (ID)
+Issue:   Requires conversion from byte array to string when synchronizing
+
+4.2 CURRENT POSITION (MEDIUM SEVERITY)
+--------------------------------------
+Reader:  uint16_t (CellInfo.IDofCell)
+PLC:     String
+Node:    ns=1;i=6102 (CurrentPosition)
+Issue:   Requires string conversion when synchronizing position
+
+4.3 RECIPE STATE (MEDIUM SEVERITY)
+-----------------------------------
+Reader:  Structured data (TRecipeInfo with multiple fields)
+PLC:     String (implicit in ActionStatus)
+Node:    ns=1;i=6100 (ActionStatus)
+Issue:   Information loss when mapping structured data to single string
+
+4.4 RESERVATION ID (LOW SEVERITY)
+---------------------------------
+Reader:  uint16_t
+PLC:     String (in method arguments)
+Issue:   Requires serialization/deserialization for method calls
+
+================================================================================
+5. SEMANTIC CONFLICTS
+================================================================================
+
+5.1 PRODUCT ID STORAGE (HIGH SEVERITY)
+--------------------------------------
+Conflict: Product ID stored in different locations
+- Reader: NFC Tag UID (sUid[7]) - read-only from tag
+- PLC:    CurrentId variable (ns=1;i=6101) - writable
+
+Current Behavior: Reader reads Product ID from NFC tag but does NOT
+                  write it to PLC CurrentId variable.
+
+Required Behavior: Reader should write NFC UID (converted to string)
+                  to PLC CurrentId variable after reading tag.
+
+Impact: PLC cannot track which product is at reader location.
+
+5.2 POSITION TRACKING (HIGH SEVERITY)
+--------------------------------------
+Conflict: Position tracking mismatch
+- Reader: Static CellInfo.IDofCell (reader's own cell ID)
+- PLC:    CurrentPosition variable (ns=1;i=6102) - writable
+
+Current Behavior: Reader knows its own cell ID but does NOT update
+                  PLC CurrentPosition when product arrives.
+
+Required Behavior: Reader should write its CellInfo.IDofCell (as string)
+                  to PLC CurrentPosition when NFC tag is detected.
+
+Impact: PLC cannot track product location in system.
+
+5.3 TRANSPORT STATUS (MEDIUM SEVERITY)
+--------------------------------------
+Conflict: Transport status synchronization mismatch
+- Reader: TRecipeStep.IsTransport flag (on NFC tag)
+- PLC:    ActionStatus variable (ns=1;i=6100) - writable
+
+Current Behavior: Reader tracks transport status on NFC tag but does NOT
+                  sync to PLC ActionStatus.
+
+Required Behavior: Reader should update PLC ActionStatus when transport
+                  state changes.
+
+Impact: PLC cannot monitor transport execution status.
+
+5.4 RESERVATION METHODS (MEDIUM SEVERITY)
+-----------------------------------------
+Conflict: Different reservation method implementations
+- Reader: Rezervation (custom method, takes uint16_t reservation ID)
+- PLC:    ReserveAction (ns=1;i=7005, takes String InputMessage)
+
+Current Behavior: Reader uses custom Rezervation method.
+
+Required Behavior: Reader should use PLC ReserveAction method for AAS
+                  compliance, or align method signatures.
+
+Impact: Inconsistent reservation handling, not using standard AAS method.
+
+5.5 STATUS QUERY METHODS (LOW SEVERITY)
+---------------------------------------
+Conflict: Different status query methods
+- Reader: IsFinished (custom method, returns boolean)
+- PLC:    GetStatus (ns=1;i=7002, takes/returns String)
+
+Current Behavior: Reader uses custom IsFinished method.
+
+Required Behavior: Consider using PLC GetStatus method or align method
+                  signatures.
+
+Impact: Different method signatures for status queries.
+
+================================================================================
+6. SYNC-CRITICAL MISMATCHES
+================================================================================
+
+CRITICAL ISSUE #1: Product ID Not Synchronized
+------------------------------------------------
+Severity:        CRITICAL
+Reader Source:   NFC Tag UID (sUid[7])
+PLC Target:      CurrentId (ns=1;i=6101)
+Current:         Reader reads Product ID from NFC tag but does NOT write
+                to PLC
+Required:        Reader should write NFC UID (converted to string) to
+                PLC CurrentId variable
+Impact:          PLC cannot track which product is at reader location
+Risk:            Product tracking failure, system cannot identify products
+
+CRITICAL ISSUE #2: Current Position Not Synchronized
+-----------------------------------------------------
+Severity:        CRITICAL
+Reader Source:   CellInfo.IDofCell (static reader cell ID)
+PLC Target:      CurrentPosition (ns=1;i=6102)
+Current:         Reader knows its cell ID but does NOT update PLC
+Required:        Reader should write its cell ID (as string) to PLC
+                CurrentPosition when tag detected
+Impact:          PLC cannot track product location in system
+Risk:            Location tracking failure, system cannot route products
+
+HIGH PRIORITY ISSUE #3: Transport Status Not Synchronized
+----------------------------------------------------------
+Severity:        HIGH
+Reader Source:   TRecipeStep.IsTransport flag
+PLC Target:      ActionStatus (ns=1;i=6100)
+Current:         Reader tracks transport status on NFC tag but does NOT
+                sync to PLC
+Required:        Reader should update PLC ActionStatus when transport
+                completes
+Impact:          PLC cannot monitor transport execution status
+Risk:            Status monitoring gaps, delayed error detection
+
+HIGH PRIORITY ISSUE #4: Reservation Method Mismatch
+-----------------------------------------------------
+Severity:        HIGH
+Reader Method:   Rezervation (custom)
+PLC Method:      ReserveAction (ns=1;i=7005)
+Current:         Reader uses custom reservation method
+Required:        Reader should use PLC ReserveAction method for AAS
+                compliance
+Impact:          Inconsistent reservation handling
+Risk:            Method signature incompatibility, maintenance issues
+
+================================================================================
+7. RECOMMENDED ALIGNMENT STRATEGY
+================================================================================
+
+IMMEDIATE ACTIONS (CRITICAL/HIGH PRIORITY):
+-------------------------------------------
+
+1. Implement Product ID Synchronization
+   Priority: CRITICAL
+   Action: After reading NFC tag UID, convert to string and write to
+          PLC CurrentId variable (ns=1;i=6101)
+   Implementation: Add OPC UA variable write after NFC tag read in
+                   NFC_Handler_LoadData or similar function
+   Code Location: ESP32_Firmware_ASS_Interpreter/components/NFC_Handler/
+
+2. Implement Position Synchronization
+   Priority: CRITICAL
+   Action: When NFC tag is detected, write reader's CellInfo.IDofCell
+          (as string) to PLC CurrentPosition variable (ns=1;i=6102)
+   Implementation: Add OPC UA variable write in tag detection handler
+   Code Location: ESP32_Firmware_ASS_Interpreter/main/app.c State_Machine
+
+3. Replace Custom Rezervation with PLC ReserveAction
+   Priority: HIGH
+   Action: Use PLC ReserveAction method (ns=1;i=7005) instead of custom
+          Rezervation method
+   Implementation: Modify Reserve() function to call PLC ReserveAction
+                   with proper String argument format
+   Code Location: ESP32_Firmware_ASS_Interpreter/components/OPC_Klient/
+
+4. Synchronize Transport Status
+   Priority: HIGH
+   Action: Update PLC ActionStatus variable (ns=1;i=6100) when
+          TRecipeStep.IsTransport changes
+   Implementation: Add OPC UA variable write when transport state changes
+   Code Location: ESP32_Firmware_ASS_Interpreter/main/app.c State_Transport
+
+OPTIONAL IMPROVEMENTS (MEDIUM/LOW PRIORITY):
+-------------------------------------------
+
+5. Use PLC GetStatus Method
+   Priority: MEDIUM
+   Action: Consider using PLC GetStatus (ns=1;i=7002) instead of custom
+          IsFinished
+   Note: May require method signature changes
+
+6. Synchronize Recipe State
+   Priority: LOW
+   Action: Consider writing key recipe state fields (ActualRecipeStep,
+          RecipeDone) to PLC variables
+   Note: Would require additional PLC variables or use existing ones
+
+7. Implement OPC UA Server (Future Enhancement)
+   Priority: LOW
+   Action: Consider implementing OPC UA server on reader to expose its
+          own AAS structure
+   Note: Major architectural change - would require significant
+         refactoring
+
+================================================================================
+8. RISK ASSESSMENT
+================================================================================
+
+HIGH RISK AREAS:
+----------------
+1. Product Tracking Failure
+   - Reader does not sync Product ID to PLC
+   - System cannot identify products at reader locations
+   - Risk Level: CRITICAL
+
+2. Location Tracking Failure
+   - Reader does not sync position to PLC
+   - System cannot track product locations
+   - Risk Level: CRITICAL
+
+3. Status Monitoring Gaps
+   - Transport/process status not synchronized
+   - Delayed error detection
+   - Risk Level: HIGH
+
+4. Method Incompatibility
+   - Custom methods vs standard AAS methods
+   - Maintenance and integration issues
+   - Risk Level: MEDIUM
+
+SYNC-CRITICAL ELEMENTS:
+-----------------------
+These elements MUST be synchronized for proper system operation:
+- Product ID (CurrentId)
+- Current Position
+- Transport Status (ActionStatus)
+- Reservation handling (ReserveAction method)
+
+================================================================================
+9. SUMMARY STATISTICS
+================================================================================
+
+PLC AAS Structure:
+- Variables:        14
+- Methods:           6
+- Namespaces:        1
+- Data Blocks:       2 (PassiveAAS_DB, Active AAS_DB)
+
+Reader Structure:
+- OPC UA Variables:  0 (no server)
+- OPC UA Methods:    0 (no server)
+- Custom Methods:    6 (client-side)
+- Internal Structures: 4 (TCardInfo, TRecipeInfo, TRecipeStep, CellInfo)
+
+Mismatches:
+- Critical:          2
+- High Severity:     4
+- Medium Severity:   3
+- Low Severity:      2
+
+================================================================================
+10. CONCLUSION
+================================================================================
+
+The NFC reader and PLC have fundamentally different architectures:
+- Reader: OPC UA Client with internal data structures
+- PLC: OPC UA Server with exposed AAS structure
+
+The main synchronization gaps are:
+1. Product ID not written to PLC CurrentId variable
+2. Position not written to PLC CurrentPosition variable
+3. Transport status not synchronized to PLC ActionStatus
+4. Custom methods instead of standard AAS methods
+
+To align the reader with PLC AAS structure, the reader must:
+1. Write Product ID to PLC CurrentId variable after reading NFC tag
+2. Write position to PLC CurrentPosition variable when tag detected
+3. Update PLC ActionStatus when transport state changes
+4. Use PLC ReserveAction method instead of custom Rezervation
+
+These changes will enable proper AAS synchronization between reader and PLC,
+allowing the PLC to track products, positions, and status throughout the system.
+
+================================================================================
+END OF REPORT
+================================================================================

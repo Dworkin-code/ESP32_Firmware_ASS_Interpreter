@@ -1,0 +1,92 @@
+{
+  "metadata": {
+    "comparison": "Current PLC AAS (NodeSet/reports) vs Target AAS models",
+    "generated": "2026-02-20",
+    "sources": ["PLC_AAS_Extraction_Report.txt", "PLC_final_aas_extraction.json", "PLC_opcua_aas_extraction.json"]
+  },
+  "resolved_in_target": [
+    { "plc_variable": "CurrentId", "plc_node": "ns=1;i=6101", "target_path": "Product/ProductCore/CurrentId", "status": "resolved" },
+    { "plc_variable": "OutputPositionSr", "plc_node": "ns=1;i=6105", "target_path": "Cell/Process/OutputPositionSr", "status": "resolved" },
+    { "plc_variable": "QueueHistoryBuffer", "plc_node": "ns=1;i=6106", "target_path": "Cell/Queue_interface/QueueHistoryBuffer", "status": "resolved" }
+  ],
+  "current_plc_summary": {
+    "variables": 14,
+    "methods": 6,
+    "all_variable_datatype": "String",
+    "node_id_range_variables": "ns=1;i=6100..6107 (Dynamic), ns=1;i=6200..6205 (Static)"
+  },
+  "by_model": {
+    "TARGET_CELL_AAS": {
+      "missing_elements": [
+        { "path": "Cell/Status_System/Ready", "data_type": "Bool", "description": "Cell ready flag" },
+        { "path": "Cell/Status_System/Fault", "data_type": "Bool", "description": "Cell fault flag" },
+        { "path": "Cell/Status_System/ErrorCode", "data_type": "Int", "description": "Cell error code" },
+        { "path": "Cell/Process/SupportedProcessTypes", "data_type": "String", "description": "Supported process types" },
+        { "path": "Cell/Maintenance_minimal/MaintenanceRequired", "data_type": "Bool", "description": "Optional maintenance flag" }
+      ],
+      "extra_elements_in_plc": [],
+      "rename_candidates": [
+        { "current": "TotalMaxBuffer", "plc_node": "ns=1;i=6205", "target_path": "Cell/Queue_interface/TotalMaxBuffer", "suggested_rename": "TotalMaxBuffer (keep) or map to Int" }
+      ],
+      "datatype_mismatches": [
+        { "plc_node": "ns=1;i=6205", "plc_type": "String", "target_type": "Int", "target_path": "Cell/Queue_interface/TotalMaxBuffer", "recommendation": "Target prefers Int for buffer count; PLC uses String - keep String for S7-1200 or add Int variable" },
+        { "plc_node": "ns=1;i=6103", "plc_type": "String", "target_type": "Int", "target_path": "Cell/Queue_interface/ItemCountP" },
+        { "plc_node": "ns=1;i=6104", "plc_type": "String", "target_type": "Int", "target_path": "Cell/Queue_interface/ItemCountRP" }
+      ],
+      "access_level_mismatches": "All PLC variables are ReadWrite; target Cell Identification/Status/Process are Read. Optional: restrict static config to Read if desired.",
+      "synchronization_gaps": "None for Cell-only; Cell data is PLC-owned. Queue methods (FreeFromPosition, FreeFromQueue, GetStatus, GetSupported, ReserveAction) exist and align with target methods."
+    },
+    "TARGET_PRODUCT_AAS": {
+      "missing_elements": [
+        { "path": "Product/ProductCore/TagUID", "data_type": "String", "description": "Dedicated NFC UID string (PLC has only CurrentId/ID)" },
+        { "path": "Product/ProductCore/RecipeID_or_VariantID", "data_type": "String", "description": "Recipe/variant ID" },
+        { "path": "Product/ProductCore/State", "data_type": "Int", "description": "Product state enum/step" },
+        { "path": "Product/ProductCore/Timestamp", "data_type": "String", "description": "Last update timestamp" },
+        { "path": "Product/ProductCore/ErrorCode", "data_type": "Int", "description": "Product error code" },
+        { "path": "Product/ProductCore/SchemaVersion", "data_type": "String", "description": "Schema version" }
+      ],
+      "extra_elements_in_plc": [
+        { "plc_node": "ns=1;i=6200", "browse_name": "ID", "note": "Dual use (Cell ID vs Product ID); target separates Cell.ID and Product.ProductID" }
+      ],
+      "rename_candidates": [
+        { "current": "CurrentPosition", "plc_node": "ns=1;i=6102", "target_path": "Product/ProductCore/CurrentPosition", "suggested_rename": "Keep name" },
+        { "current": "ID", "plc_node": "ns=1;i=6200", "target_path": "Product/ProductCore/ProductID (when used for product)", "suggested_rename": "ProductID when in Product context" }
+      ],
+      "datatype_mismatches": [
+        { "plc_node": "ns=1;i=6101", "plc_type": "String", "target_type": "String", "target_path": "Product/ProductCore/ProductID or CurrentId", "ok": true, "note": "Reader must write TagUID/ProductID as string" },
+        { "plc_node": "ns=1;i=6102", "plc_type": "String", "target_type": "String", "target_path": "Product/ProductCore/CurrentPosition", "ok": true }
+      ],
+      "access_level_mismatches": "Target marks ProductID, TagUID, State, Timestamp, ErrorCode, CurrentId, CurrentPosition as writable by reader; PLC already ReadWrite - OK.",
+      "synchronization_gaps": "PLC has variables but reader currently does NOT write CurrentId, CurrentPosition, ActionStatus (per existing reports). Implementing reader writes to these nodes would close the gap."
+    },
+    "TARGET_TRANSPORT_AAS": {
+      "missing_elements": [
+        { "path": "Transport/CmdStart", "data_type": "Bool", "description": "Start command" },
+        { "path": "Transport/CmdReset", "data_type": "Bool", "description": "Reset command" },
+        { "path": "Transport/TaskID", "data_type": "String", "description": "Task identifier" },
+        { "path": "Transport/Ready", "data_type": "Bool", "description": "Ready flag" },
+        { "path": "Transport/Busy", "data_type": "Bool", "description": "Busy flag" },
+        { "path": "Transport/Done", "data_type": "Bool", "description": "Done flag" },
+        { "path": "Transport/Fault", "data_type": "Bool", "description": "Fault flag" },
+        { "path": "Transport/ErrorCode", "data_type": "Int", "description": "Transport error code" }
+      ],
+      "extra_elements_in_plc": [
+        { "plc_node": "ns=1;i=6100", "browse_name": "ActionStatus", "note": "Single String for status; target splits into Ready/Busy/Done/Fault/ErrorCode" },
+        { "plc_node": "ns=1;i=7005", "browse_name": "ReserveAction", "note": "Method exists; target Transport optional has no explicit method, ReserveAction is Cell-level" }
+      ],
+      "rename_candidates": [
+        { "current": "ActionStatus", "plc_node": "ns=1;i=6100", "target_path": "Transport", "suggested_rename": "Keep for backward compatibility or add Transport/Ready, Busy, Done, Fault, ErrorCode and deprecate ActionStatus string" }
+      ],
+      "datatype_mismatches": [
+        { "plc_node": "ns=1;i=6100", "plc_type": "String", "target_type": "Bool + Int", "target_path": "Transport (Ready, Busy, Done, Fault, ErrorCode)", "recommendation": "Target uses separate Bool/Int nodes; PLC uses one String. Either extend PLC with new nodes or encode in ActionStatus string." }
+      ],
+      "access_level_mismatches": "Target Transport CmdStart/CmdReset/TaskID are ReadWrite (PLC); Ready/Busy/Done/Fault/ErrorCode are Read - PLC can expose all as ReadWrite for simplicity.",
+      "synchronization_gaps": "Transport AAS is PLC-only; no reader sync required. If robot is controlled by same PLC, adding Transport.* nodes (or clarifying ActionStatus semantics) aligns with target."
+    }
+  },
+  "summary": {
+    "cell": "PLC has most Cell inputs (ID, Name, InputPosition, OutputPosition, Queue*, methods). Missing: Status_System (Ready, Fault, ErrorCode), SupportedProcessTypes. Some types String vs Int.",
+    "product": "PLC has ID, CurrentId, CurrentPosition, Name, Submodel. Missing: TagUID, RecipeID_or_VariantID, State, Timestamp, ErrorCode, SchemaVersion. Reader must write ProductID/CurrentPosition to close sync gap.",
+    "transport": "PLC has ActionStatus (String) and ReserveAction. Target expects separate Ready/Busy/Done/Fault/ErrorCode (Bool/Int). Missing dedicated Transport command/status nodes unless encoded in ActionStatus."
+  }
+}

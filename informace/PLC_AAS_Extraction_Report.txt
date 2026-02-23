@@ -1,0 +1,240 @@
+================================================================================
+OPC UA AAS STRUCTURE EXTRACTION REPORT
+Siemens S7-1200 PLC - TIA Portal V17
+================================================================================
+
+1. OPC UA SERVER CONFIGURATION
+--------------------------------------------------------------------------------
+Namespace URI: opc.tcp://192.168.0.1
+Namespace Version: 1.00
+Publication Date: 2022-03-16T00:00:00Z
+
+2. NAMESPACES
+--------------------------------------------------------------------------------
+  Index 0: opc.tcp://192.168.0.1
+
+3. DATA BLOCKS
+--------------------------------------------------------------------------------
+  - PassiveAAS_DB (Type: AAS)
+
+4. OPC UA METHODS
+--------------------------------------------------------------------------------
+  Method: FreeFromPosition
+    BrowseName: FreeFromPosition
+    NodeId: ns=1;i=7000
+    PLC Mapping: "Active AAS_DB"."FreeFromPosition_Instance".Method
+
+  Method: FreeFromQueue
+    BrowseName: FreeFromQueue
+    NodeId: ns=1;i=7001
+    PLC Mapping: "Active AAS_DB"."FreeFromQueue_Instance".Method
+
+  Method: GetStatus
+    BrowseName: GetStatus
+    NodeId: ns=1;i=7002
+    PLC Mapping: "Active AAS_DB"."GetStatus_Instance".Method
+
+  Method: GetSupported
+    BrowseName: GetSupported
+    NodeId: ns=1;i=7003
+    PLC Mapping: "Active AAS_DB"."GetSupported_Instance".Method
+
+  Method: ReportProduct
+    BrowseName: ReportProduct
+    NodeId: ns=1;i=7004
+    PLC Mapping: "Active AAS_DB"."ReportProduct_Instance".Method
+
+  Method: ReserveAction
+    BrowseName: ReserveAction
+    NodeId: ns=1;i=7005
+    PLC Mapping: "Active AAS_DB"."ReserveAction_Instance".Method
+
+
+5. PUBLISHED OPC UA VARIABLES
+--------------------------------------------------------------------------------
+NodeId               BrowseName                DisplayName               DataType     Category   PLC Path                                
+--------------------------------------------------------------------------------
+ns=1;i=6100          ActionStatus              ActionStatus              String       Dynamic    "PassiveAAS_DB"."ActionStatus"          
+ns=1;i=6101          CurrentId                 CurrentId                 String       Dynamic    "PassiveAAS_DB"."CurrentId"             
+ns=1;i=6102          CurrentPosition           CurrentPosition           String       Dynamic    "PassiveAAS_DB"."CurrentIdPosition"     
+ns=1;i=6103          ItemCountP                ItemCountP                String       Dynamic    "PassiveAAS_DB"."ItemCountP"            
+ns=1;i=6104          ItemCountRP               ItemCountRP               String       Dynamic    "PassiveAAS_DB"."ItemCountRP"           
+ns=1;i=6105          OutputPositionSr          OutputPositionSr          String       Dynamic    "PassiveAAS_DB"."OutputPositionSr"      
+ns=1;i=6106          QueueHistoryBuffer        QueueHistoryBuffer        String       Dynamic    "PassiveAAS_DB"."QueueHistoryStatus"    
+ns=1;i=6107          QueueStatus               QueueStatus               String       Dynamic    "PassiveAAS_DB"."QueueStatus"           
+ns=1;i=6200          ID                        ID                        String       Static     "PassiveAAS_DB"."ID"                    
+ns=1;i=6201          InputPosition             InputPosition             String       Static     "PassiveAAS_DB"."InputPosition"         
+ns=1;i=6202          Name                      Name                      String       Static     "PassiveAAS_DB"."Name"                  
+ns=1;i=6203          OutputPosition            OutputPosition            String       Static     "PassiveAAS_DB"."OutputPosition"        
+ns=1;i=6204          Submodel                  Submodel                  String       Static     "PassiveAAS_DB"."Submodel"              
+ns=1;i=6205          TotalMaxBuffer            TotalMaxBuffer            String       Static     "PassiveAAS_DB"."TotalMaximumBuffer"    
+
+6. AAS DETECTED STRUCTURES
+--------------------------------------------------------------------------------
+6.1 PRODUCT CORE VARIABLES
+--------------------------------------------------------------------------------
+  - CurrentId (CurrentId)
+    NodeId: ns=1;i=6101
+    PLC Path: "PassiveAAS_DB"."CurrentId"
+    Access: Read/Write
+
+  - CurrentPosition (CurrentIdPosition)
+    NodeId: ns=1;i=6102
+    PLC Path: "PassiveAAS_DB"."CurrentIdPosition"
+    Access: Read/Write
+
+  - ID (ID)
+    NodeId: ns=1;i=6200
+    PLC Path: "PassiveAAS_DB"."ID"
+    Access: Read/Write
+
+
+6.2 CELL STRUCTURES
+--------------------------------------------------------------------------------
+  - CurrentPosition
+    NodeId: ns=1;i=6102
+    PLC Mapping: "PassiveAAS_DB"."CurrentIdPosition"
+
+  - OutputPositionSr
+    NodeId: ns=1;i=6105
+    PLC Mapping: "PassiveAAS_DB"."OutputPositionSr"
+
+  - QueueHistoryBuffer
+    NodeId: ns=1;i=6106
+    PLC Mapping: "PassiveAAS_DB"."QueueHistoryStatus"
+
+  - QueueStatus
+    NodeId: ns=1;i=6107
+    PLC Mapping: "PassiveAAS_DB"."QueueStatus"
+
+  - InputPosition
+    NodeId: ns=1;i=6201
+    PLC Mapping: "PassiveAAS_DB"."InputPosition"
+
+  - OutputPosition
+    NodeId: ns=1;i=6203
+    PLC Mapping: "PassiveAAS_DB"."OutputPosition"
+
+  - TotalMaxBuffer
+    NodeId: ns=1;i=6205
+    PLC Mapping: "PassiveAAS_DB"."TotalMaximumBuffer"
+
+  - FreeFromPosition
+    NodeId: ns=1;i=7000
+    PLC Mapping: "Active AAS_DB"."FreeFromPosition_Instance".Method
+
+  - FreeFromQueue
+    NodeId: ns=1;i=7001
+    PLC Mapping: "Active AAS_DB"."FreeFromQueue_Instance".Method
+
+
+6.3 PRODUCT STRUCTURES
+--------------------------------------------------------------------------------
+  - ReportProduct
+    NodeId: ns=1;i=7004
+    PLC Mapping: "Active AAS_DB"."ReportProduct_Instance".Method
+
+
+6.4 TRANSPORT STRUCTURES
+--------------------------------------------------------------------------------
+  - ActionStatus
+    NodeId: ns=1;i=6100
+    PLC Mapping: "PassiveAAS_DB"."ActionStatus"
+
+  - ReserveAction
+    NodeId: ns=1;i=7005
+    PLC Mapping: "Active AAS_DB"."ReserveAction_Instance".Method
+
+
+7. SYNCHRONIZATION INTERFACE (Writable Variables)
+--------------------------------------------------------------------------------
+Total writable variables: 14
+
+NodeId               BrowseName                PLC Path                                           DataType    
+--------------------------------------------------------------------------------
+ns=1;i=6100          ActionStatus              "PassiveAAS_DB"."ActionStatus"                     String      
+ns=1;i=6101          CurrentId                 "PassiveAAS_DB"."CurrentId"                        String      
+ns=1;i=6102          CurrentPosition           "PassiveAAS_DB"."CurrentIdPosition"                String      
+ns=1;i=6103          ItemCountP                "PassiveAAS_DB"."ItemCountP"                       String      
+ns=1;i=6104          ItemCountRP               "PassiveAAS_DB"."ItemCountRP"                      String      
+ns=1;i=6105          OutputPositionSr          "PassiveAAS_DB"."OutputPositionSr"                 String      
+ns=1;i=6106          QueueHistoryBuffer        "PassiveAAS_DB"."QueueHistoryStatus"               String      
+ns=1;i=6107          QueueStatus               "PassiveAAS_DB"."QueueStatus"                      String      
+ns=1;i=6200          ID                        "PassiveAAS_DB"."ID"                               String      
+ns=1;i=6201          InputPosition             "PassiveAAS_DB"."InputPosition"                    String      
+ns=1;i=6202          Name                      "PassiveAAS_DB"."Name"                             String      
+ns=1;i=6203          OutputPosition            "PassiveAAS_DB"."OutputPosition"                   String      
+ns=1;i=6204          Submodel                  "PassiveAAS_DB"."Submodel"                         String      
+ns=1;i=6205          TotalMaxBuffer            "PassiveAAS_DB"."TotalMaximumBuffer"               String      
+
+8. OPC UA HIERARCHY TREE
+--------------------------------------------------------------------------------
+└── [Variable] ActionStatus (NodeId: ns=1;i=6100)
+└── [Variable] CurrentId (NodeId: ns=1;i=6101)
+└── [Variable] CurrentPosition (NodeId: ns=1;i=6102)
+└── [Variable] ItemCountP (NodeId: ns=1;i=6103)
+└── [Variable] ItemCountRP (NodeId: ns=1;i=6104)
+└── [Variable] OutputPositionSr (NodeId: ns=1;i=6105)
+└── [Variable] QueueHistoryBuffer (NodeId: ns=1;i=6106)
+└── [Variable] QueueStatus (NodeId: ns=1;i=6107)
+└── [Variable] ID (NodeId: ns=1;i=6200)
+└── [Variable] InputPosition (NodeId: ns=1;i=6201)
+└── [Variable] Name (NodeId: ns=1;i=6202)
+└── [Variable] OutputPosition (NodeId: ns=1;i=6203)
+└── [Variable] Submodel (NodeId: ns=1;i=6204)
+└── [Variable] TotalMaxBuffer (NodeId: ns=1;i=6205)
+└── [Method] FreeFromPosition (NodeId: ns=1;i=7000)
+└── [Method] FreeFromQueue (NodeId: ns=1;i=7001)
+└── [Method] GetStatus (NodeId: ns=1;i=7002)
+└── [Method] GetSupported (NodeId: ns=1;i=7003)
+└── [Method] ReportProduct (NodeId: ns=1;i=7004)
+└── [Method] ReserveAction (NodeId: ns=1;i=7005)
+
+9. RECOMMENDED PRODUCT CORE SYNCHRONIZATION CONTRACT
+--------------------------------------------------------------------------------
+
+Based on the extracted structure, the following variables form the Product Core:
+
+Core Variables:
+  - ID: Product/Asset identifier
+    OPC UA NodeId: ns=1;i=6101
+    OPC UA BrowsePath: PLCServiceProvider/Variables/Dynamic/CurrentId
+    PLC Path: "PassiveAAS_DB"."CurrentId"
+    Access: Read/Write
+
+  - CurrentId: Current product ID in system
+    OPC UA NodeId: ns=1;i=6101
+    OPC UA BrowsePath: PLCServiceProvider/Variables/Dynamic/CurrentId
+    PLC Path: "PassiveAAS_DB"."CurrentId"
+    Access: Read/Write
+
+  - CurrentPosition: Current position of product
+    OPC UA NodeId: ns=1;i=6102
+    OPC UA BrowsePath: PLCServiceProvider/Variables/Dynamic/CurrentPosition
+    PLC Path: "PassiveAAS_DB"."CurrentIdPosition"
+    Access: Read/Write
+
+  - Name: Product name
+    OPC UA NodeId: ns=1;i=6202
+    OPC UA BrowsePath: PLCServiceProvider/Variables/Static/Name
+    PLC Path: "PassiveAAS_DB"."Name"
+    Access: Read/Write
+
+  - Submodel: AAS Submodel reference
+    OPC UA NodeId: ns=1;i=6204
+    OPC UA BrowsePath: PLCServiceProvider/Variables/Static/Submodel
+    PLC Path: "PassiveAAS_DB"."Submodel"
+    Access: Read/Write
+
+
+Synchronization Protocol:
+  1. NFC Reader reads ProductID/TagUID from NFC tag
+  2. NFC Reader writes to PLC via OPC UA:
+     - CurrentId (ProductID from tag)
+     - CurrentPosition (if known)
+  3. PLC updates internal state
+  4. PLC exposes updated state via OPC UA for monitoring
+
+================================================================================
+END OF REPORT
+================================================================================

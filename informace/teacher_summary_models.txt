@@ -1,0 +1,92 @@
+================================================================================
+AAS TARGET MODELS & GAP ANALYSIS – SUMMARY FOR SUPERVISOR
+Testbed 4.0: PLC (OPC UA server), NFC Reader (OPC UA client), Robot (PLC-controlled)
+================================================================================
+Date: 2026-02-20
+================================================================================
+
+1. DELIVERABLES CREATED (all in informace/)
+--------------------------------------------------------------------------------
+- target_aas_models.json       Target schemas for Cell, Product, Transport AAS
+- target_aas_models_tree.txt   Canonical tree view of target models
+- gap_analysis_plc_vs_target.json   PLC current vs target (missing/extra/rename/type)
+- gap_analysis_reader_vs_target.json  Reader vs target (sync gaps, method alignment)
+- teacher_summary_models.txt   This summary
+
+2. TARGET MODELS (REFINED)
+--------------------------------------------------------------------------------
+Target model was extended to include three PLC variables: CurrentId,
+OutputPositionSr, QueueHistoryBuffer (see target_aas_models.json and
+target_aas_models_tree.txt). CurrentId is under Product/ProductCore;
+OutputPositionSr under Cell/Process; QueueHistoryBuffer under Cell/Queue_interface.
+
+- Cell AAS: Identification (ID, Name), Status/System (Ready, Fault, ErrorCode),
+  Process (InputPosition, OutputPosition, OutputPositionSr, SupportedProcessTypes),
+  minimal Maintenance; optional Queue (QueueStatus, QueueHistoryBuffer,
+  TotalMaxBuffer, ItemCountP/RP) and methods (FreeFromPosition, FreeFromQueue,
+  GetStatus, GetSupported, ReserveAction).
+
+- Product AAS (ProductCore, minimal): ProductID, TagUID, RecipeID_or_VariantID,
+  State, Timestamp, ErrorCode, SchemaVersion, CurrentId, CurrentPosition. These
+  are mirrored in PLC; reader owns source (NFC) and must write: ProductID, TagUID,
+  RecipeID_or_VariantID, State, Timestamp, ErrorCode, CurrentId, CurrentPosition
+  (and optionally ActionStatus). SchemaVersion is PLC/internal.
+
+- Transport AAS (PLC only): CmdStart, CmdReset, TaskID, Ready, Busy, Done, Fault,
+  ErrorCode; optional Queue/Lock/OwnerCellID. Robot has no AAS; PLC commands
+  robot. Reader does not write Transport nodes.
+
+3. GAP HIGHLIGHTS – PLC VS TARGET
+--------------------------------------------------------------------------------
+- Cell: PLC already has ID, Name, Input/OutputPosition, Queue*, methods. Missing:
+  Status_System (Ready, Fault, ErrorCode), SupportedProcessTypes. Some vars are
+  String where target prefers Int (e.g. TotalMaxBuffer, ItemCountP/RP).
+- Product: PLC has ID, CurrentId, CurrentPosition, Name, Submodel. Missing:
+  TagUID, RecipeID_or_VariantID, State, Timestamp, ErrorCode, SchemaVersion.
+  Rename/alias: CurrentId → ProductID, keep CurrentPosition.
+- Transport: PLC has ActionStatus (single String) and ReserveAction. Target
+  expects separate Ready, Busy, Done, Fault, ErrorCode (Bool/Int). Either add
+  these nodes or define encoding in ActionStatus.
+
+4. GAP HIGHLIGHTS – READER VS TARGET
+--------------------------------------------------------------------------------
+- Reader does not expose OPC UA server; it uses custom methods (Inquire, Rezervation,
+  DoProcess, IsFinished, Occupancy) and does not write PLC AAS variables.
+- Critical sync gaps: (1) Product ID from NFC (sUid) is not written to PLC
+  CurrentId. (2) Reader cell ID is not written to PLC CurrentPosition when tag
+  is detected. (3) Transport/process status (e.g. IsTransport) is not written
+  to PLC ActionStatus.
+- Method alignment: Use PLC ReserveAction instead of custom Rezervation; consider
+  GetStatus instead of IsFinished. Inquire/DoProcess/Occupancy have no direct
+  AAS equivalent in current PLC.
+- Datatype: Reader has UID as uint8_t[7], recipe ID as uint8_t; target/PLC use
+  String – conversion required when implementing writes.
+
+5. RECOMMENDATIONS (CONCISE)
+--------------------------------------------------------------------------------
+- Implement reader writes to PLC after NFC read: CurrentId (ProductID from
+  TagUID string), CurrentPosition (reader cell ID as string), and optionally
+  ActionStatus when transport/process state changes.
+- Align reader reservation with PLC: call ReserveAction (ns=1;i=7005) with
+  String payload instead of custom Rezervation.
+- Optionally add to PLC: Cell Status_System (Ready, Fault, ErrorCode);
+  Product State, Timestamp, ErrorCode, RecipeID_or_VariantID; Transport
+  Ready/Busy/Done/Fault/ErrorCode (or formalize ActionStatus encoding).
+- Keep S7-1200–friendly types (Bool, Int, DInt, Real, String); avoid
+  inventing structures beyond existing NodeSet.
+
+6. FILES READ (SOURCES)
+--------------------------------------------------------------------------------
+informace/reader_aas_structure.json
+informace/PLC_AAS_Extraction_Report.txt
+informace/aas_comparison_report.json
+informace/aas_comparison_summary.txt
+informace/PLC_final_aas_extraction.json
+informace/PLC_opcua_aas_extraction.json
+ESP32_Firmware_ASS_Interpreter/main/app.c
+ESP32_Firmware_ASS_Interpreter/components/OPC_Klient/OPC_klient.c
+ESP32_Firmware_ASS_Interpreter/components/OPC_Klient/OPC_klient.h
+
+================================================================================
+END OF SUMMARY
+================================================================================

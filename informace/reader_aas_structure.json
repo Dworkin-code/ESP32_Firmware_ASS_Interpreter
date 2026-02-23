@@ -1,0 +1,594 @@
+{
+  "reader_type": "OPC_UA_CLIENT",
+  "note": "The NFC reader does not implement an OPC UA server. It acts as an OPC UA client that reads NFC tags and communicates with PLC servers.",
+  "opcua_client_config": {
+    "endpoint_format": "opc.tcp://{IP}:{PORT}",
+    "default_plc_endpoint": "opc.tcp://192.168.0.1:4840",
+    "connection_timeout": 1000,
+    "max_retries": 5
+  },
+  "internal_data_structures": {
+    "nfc_card_info": {
+      "structure_name": "TCardInfo",
+      "description": "Complete NFC tag data structure stored on NFC card",
+      "fields": [
+        {
+          "name": "sRecipeInfo",
+          "type": "TRecipeInfo",
+          "description": "Recipe information structure"
+        },
+        {
+          "name": "sRecipeStep",
+          "type": "TRecipeStep*",
+          "description": "Array of recipe steps"
+        },
+        {
+          "name": "sUid",
+          "type": "uint8_t[7]",
+          "description": "NFC tag UID (Product identifier)"
+        },
+        {
+          "name": "sUidLength",
+          "type": "uint8_t",
+          "description": "Length of UID"
+        },
+        {
+          "name": "TRecipeInfoLoaded",
+          "type": "bool",
+          "description": "Flag indicating recipe info is loaded"
+        },
+        {
+          "name": "TRecipeStepArrayCreated",
+          "type": "bool",
+          "description": "Flag indicating recipe step array is created"
+        },
+        {
+          "name": "TRecipeStepLoaded",
+          "type": "bool",
+          "description": "Flag indicating recipe steps are loaded"
+        }
+      ]
+    },
+    "recipe_info": {
+      "structure_name": "TRecipeInfo",
+      "description": "Recipe metadata and state",
+      "fields": [
+        {
+          "name": "ID",
+          "type": "uint8_t",
+          "description": "Recipe identifier",
+          "aas_mapping": "Product.ID or ProductCore.ID"
+        },
+        {
+          "name": "NumOfDrinks",
+          "type": "uint16_t",
+          "description": "Number of drinks produced"
+        },
+        {
+          "name": "RecipeSteps",
+          "type": "uint8_t",
+          "description": "Total number of recipe steps"
+        },
+        {
+          "name": "ActualRecipeStep",
+          "type": "uint8_t",
+          "description": "Current recipe step index",
+          "aas_mapping": "State.CurrentStep"
+        },
+        {
+          "name": "ActualBudget",
+          "type": "uint16_t",
+          "description": "Current budget remaining"
+        },
+        {
+          "name": "Parameters",
+          "type": "uint8_t",
+          "description": "Recipe parameters"
+        },
+        {
+          "name": "RightNumber",
+          "type": "uint8_t",
+          "description": "Validation number"
+        },
+        {
+          "name": "RecipeDone",
+          "type": "bool",
+          "description": "Recipe completion flag",
+          "aas_mapping": "State.RecipeDone"
+        },
+        {
+          "name": "CheckSum",
+          "type": "uint16_t",
+          "description": "Data integrity checksum"
+        }
+      ]
+    },
+    "recipe_step": {
+      "structure_name": "TRecipeStep",
+      "description": "Individual recipe step with process and transport information",
+      "fields": [
+        {
+          "name": "ID",
+          "type": "uint8_t",
+          "description": "Step identifier"
+        },
+        {
+          "name": "NextID",
+          "type": "uint8_t",
+          "description": "Next step identifier"
+        },
+        {
+          "name": "TypeOfProcess",
+          "type": "uint8_t",
+          "description": "Process type enum",
+          "aas_mapping": "Process.Type"
+        },
+        {
+          "name": "ParameterProcess1",
+          "type": "uint8_t",
+          "description": "Process parameter 1"
+        },
+        {
+          "name": "ParameterProcess2",
+          "type": "uint16_t",
+          "description": "Process parameter 2"
+        },
+        {
+          "name": "PriceForTransport",
+          "type": "uint8_t",
+          "description": "Transport cost",
+          "aas_mapping": "Transport.Price"
+        },
+        {
+          "name": "TransportCellID",
+          "type": "uint8_t",
+          "description": "Transport cell identifier",
+          "aas_mapping": "Transport.CellID"
+        },
+        {
+          "name": "TransportCellReservationID",
+          "type": "uint16_t",
+          "description": "Transport reservation identifier",
+          "aas_mapping": "Transport.ReservationID"
+        },
+        {
+          "name": "PriceForProcess",
+          "type": "uint8_t",
+          "description": "Process cost"
+        },
+        {
+          "name": "ProcessCellID",
+          "type": "uint8_t",
+          "description": "Process cell identifier",
+          "aas_mapping": "Cell.ProcessCellID"
+        },
+        {
+          "name": "ProcessCellReservationID",
+          "type": "uint16_t",
+          "description": "Process reservation identifier",
+          "aas_mapping": "Cell.ReservationID"
+        },
+        {
+          "name": "TimeOfProcess",
+          "type": "UA_DateTime",
+          "description": "Process execution time",
+          "aas_mapping": "State.TimeOfProcess"
+        },
+        {
+          "name": "TimeOfTransport",
+          "type": "UA_DateTime",
+          "description": "Transport execution time",
+          "aas_mapping": "Transport.TimeOfTransport"
+        },
+        {
+          "name": "NeedForTransport",
+          "type": "bool",
+          "description": "Transport required flag",
+          "aas_mapping": "Transport.NeedForTransport"
+        },
+        {
+          "name": "IsTransport",
+          "type": "bool",
+          "description": "Transport completed flag",
+          "aas_mapping": "Transport.IsTransport"
+        },
+        {
+          "name": "IsProcess",
+          "type": "bool",
+          "description": "Process completed flag",
+          "aas_mapping": "State.IsProcess"
+        },
+        {
+          "name": "IsStepDone",
+          "type": "bool",
+          "description": "Step completed flag",
+          "aas_mapping": "State.IsStepDone"
+        }
+      ]
+    },
+    "cell_info": {
+      "structure_name": "CellInfo",
+      "description": "Cell/PLC information for OPC UA communication",
+      "fields": [
+        {
+          "name": "IDofCell",
+          "type": "uint16_t",
+          "description": "Cell identifier",
+          "aas_mapping": "Cell.ID or Asset.Identification"
+        },
+        {
+          "name": "IPAdress",
+          "type": "char*",
+          "description": "OPC UA server endpoint address"
+        },
+        {
+          "name": "IPAdressLenght",
+          "type": "size_t",
+          "description": "Address string length"
+        },
+        {
+          "name": "ProcessTypes",
+          "type": "uint8_t*",
+          "description": "Array of supported process types"
+        },
+        {
+          "name": "ProcessTypesLenght",
+          "type": "size_t",
+          "description": "Number of process types"
+        }
+      ]
+    },
+    "reservation": {
+      "structure_name": "Reservation",
+      "description": "Reservation information for cell processes",
+      "fields": [
+        {
+          "name": "IDofCell",
+          "type": "uint16_t",
+          "description": "Cell identifier"
+        },
+        {
+          "name": "IDofReservation",
+          "type": "uint16_t",
+          "description": "Reservation identifier",
+          "aas_mapping": "Transport.ReservationID or Cell.ReservationID"
+        },
+        {
+          "name": "ProcessType",
+          "type": "uint8_t",
+          "description": "Process type enum"
+        },
+        {
+          "name": "Price",
+          "type": "float",
+          "description": "Reservation price",
+          "aas_mapping": "Transport.Price or Process.Price"
+        },
+        {
+          "name": "TimeOfReservation",
+          "type": "UA_DateTime",
+          "description": "Reservation timestamp",
+          "aas_mapping": "State.TimeOfReservation"
+        }
+      ]
+    }
+  },
+  "opcua_client_methods": {
+    "methods_called": [
+      {
+        "method_name": "Inquire",
+        "node_id": "ns=1;i=Inquire",
+        "browse_name": "Inquire",
+        "parent_node": "ObjectsFolder",
+        "description": "Query available cells for a process type",
+        "input_arguments": [
+          {
+            "name": "IDInterpreter",
+            "type": "uint16_t",
+            "description": "Interpreter/Cell ID"
+          },
+          {
+            "name": "TypeOfProcess",
+            "type": "uint8_t",
+            "description": "Process type"
+          },
+          {
+            "name": "priority",
+            "type": "UA_Boolean",
+            "description": "Priority flag"
+          },
+          {
+            "name": "param1",
+            "type": "uint8_t",
+            "description": "Parameter 1"
+          },
+          {
+            "name": "param2",
+            "type": "uint16_t",
+            "description": "Parameter 2"
+          }
+        ],
+        "output_arguments": [
+          {
+            "name": "IDofReservation",
+            "type": "uint16_t",
+            "description": "Reservation ID"
+          },
+          {
+            "name": "Price",
+            "type": "float",
+            "description": "Reservation price"
+          },
+          {
+            "name": "TimeOfReservation",
+            "type": "UA_DateTime",
+            "description": "Reservation timestamp"
+          }
+        ],
+        "plc_aas_equivalent": "Not directly mapped - custom method"
+      },
+      {
+        "method_name": "IsValid",
+        "node_id": "ns=1;i=IsValid",
+        "browse_name": "IsValid",
+        "parent_node": "ObjectsFolder",
+        "description": "Check if reservation is still valid",
+        "input_arguments": [
+          {
+            "name": "IDofReservation",
+            "type": "uint16_t",
+            "description": "Reservation ID to validate"
+          }
+        ],
+        "output_arguments": [
+          {
+            "name": "IsValid",
+            "type": "UA_Boolean",
+            "description": "Validity status"
+          },
+          {
+            "name": "Changed",
+            "type": "UA_Boolean",
+            "description": "Change flag"
+          }
+        ],
+        "plc_aas_equivalent": "Not directly mapped - custom method"
+      },
+      {
+        "method_name": "Rezervation",
+        "node_id": "ns=1;i=Rezervation",
+        "browse_name": "Rezervation",
+        "parent_node": "ObjectsFolder",
+        "description": "Reserve a cell for process",
+        "input_arguments": [
+          {
+            "name": "IDofReservation",
+            "type": "uint16_t",
+            "description": "Reservation ID"
+          }
+        ],
+        "output_arguments": [
+          {
+            "name": "Reserved",
+            "type": "UA_Boolean",
+            "description": "Reservation success"
+          }
+        ],
+        "plc_aas_equivalent": "ReserveAction (ns=1;i=7005)"
+      },
+      {
+        "method_name": "DoProcess",
+        "node_id": "ns=1;i=DoProcess",
+        "browse_name": "DoProcess",
+        "parent_node": "ObjectsFolder",
+        "description": "Start process execution",
+        "input_arguments": [
+          {
+            "name": "IDofReservation",
+            "type": "uint16_t",
+            "description": "Reservation ID"
+          }
+        ],
+        "output_arguments": [
+          {
+            "name": "Started",
+            "type": "UA_Boolean",
+            "description": "Process start success"
+          }
+        ],
+        "plc_aas_equivalent": "Not directly mapped - custom method"
+      },
+      {
+        "method_name": "IsFinished",
+        "node_id": "ns=1;i=IsFinished",
+        "browse_name": "IsFinished",
+        "parent_node": "ObjectsFolder",
+        "description": "Check if process is finished",
+        "input_arguments": [
+          {
+            "name": "IDofReservation",
+            "type": "uint16_t",
+            "description": "Reservation ID"
+          }
+        ],
+        "output_arguments": [
+          {
+            "name": "Finished",
+            "type": "UA_Boolean",
+            "description": "Process completion status"
+          }
+        ],
+        "plc_aas_equivalent": "GetStatus (ns=1;i=7002) - partial mapping"
+      },
+      {
+        "method_name": "Occupancy",
+        "node_id": "ns=1;i=Occupancy",
+        "browse_name": "Occupancy",
+        "parent_node": "ObjectsFolder",
+        "description": "Report cell occupancy status",
+        "input_arguments": [
+          {
+            "name": "Okupovani",
+            "type": "UA_Boolean",
+            "description": "Occupied flag"
+          }
+        ],
+        "output_arguments": [],
+        "plc_aas_equivalent": "Not directly mapped - custom method"
+      }
+    ]
+  },
+  "aas_concepts_handled": {
+    "product_identification": {
+      "source": "NFC Tag UID",
+      "reader_field": "TCardInfo.sUid",
+      "description": "Product identifier read from NFC tag",
+      "plc_mapping": "CurrentId (ns=1;i=6101) or ID (ns=1;i=6200)",
+      "data_type": "uint8_t[7]",
+      "access": "Read from NFC tag"
+    },
+    "current_position": {
+      "source": "Reader Cell ID",
+      "reader_field": "CellInfo.IDofCell",
+      "description": "Current position of product (which cell/interpreter)",
+      "plc_mapping": "CurrentPosition (ns=1;i=6102)",
+      "data_type": "uint16_t",
+      "access": "Read from reader configuration"
+    },
+    "recipe_state": {
+      "source": "NFC Tag Recipe Data",
+      "reader_field": "TRecipeInfo.ActualRecipeStep, RecipeDone, etc.",
+      "description": "Recipe execution state",
+      "plc_mapping": "State-related variables (implicit)",
+      "data_type": "Multiple fields in TRecipeInfo",
+      "access": "Read/Write NFC tag"
+    },
+    "transport": {
+      "source": "Recipe Step Data",
+      "reader_field": "TRecipeStep.TransportCellID, TransportCellReservationID, etc.",
+      "description": "Transport reservation and execution",
+      "plc_mapping": "ActionStatus (ns=1;i=6100), ReserveAction (ns=1;i=7005)",
+      "data_type": "Multiple fields in TRecipeStep",
+      "access": "Read/Write NFC tag"
+    },
+    "cell_information": {
+      "source": "Reader Configuration",
+      "reader_field": "CellInfo structure",
+      "description": "Cell/Asset identification and capabilities",
+      "plc_mapping": "Cell-related variables (implicit)",
+      "data_type": "CellInfo structure",
+      "access": "Static configuration"
+    }
+  },
+  "data_flow": {
+    "nfc_to_plc": {
+      "description": "Data flow from NFC tag to PLC via OPC UA",
+      "steps": [
+        {
+          "step": 1,
+          "action": "Read NFC tag UID",
+          "data": "Product ID (sUid)",
+          "destination": "Internal memory"
+        },
+        {
+          "step": 2,
+          "action": "Read recipe data from NFC tag",
+          "data": "TRecipeInfo, TRecipeStep[]",
+          "destination": "Internal memory"
+        },
+        {
+          "step": 3,
+          "action": "Query PLC cells via OPC UA Inquire",
+          "data": "Process type, parameters",
+          "destination": "PLC OPC UA server"
+        },
+        {
+          "step": 4,
+          "action": "Reserve cell via OPC UA Rezervation",
+          "data": "Reservation ID",
+          "destination": "PLC OPC UA server"
+        },
+        {
+          "step": 5,
+          "action": "Start process via OPC UA DoProcess",
+          "data": "Reservation ID",
+          "destination": "PLC OPC UA server"
+        },
+        {
+          "step": 6,
+          "action": "Monitor process via OPC UA IsFinished",
+          "data": "Reservation ID",
+          "destination": "PLC OPC UA server"
+        },
+        {
+          "step": 7,
+          "action": "Report occupancy via OPC UA Occupancy",
+          "data": "Occupancy status",
+          "destination": "PLC OPC UA server"
+        }
+      ],
+      "note": "Reader does NOT write Product ID or CurrentPosition directly to PLC OPC UA variables. It uses custom methods instead."
+    }
+  },
+  "missing_opcua_server": {
+    "note": "The reader does NOT implement an OPC UA server. It only acts as a client.",
+    "implications": [
+      "No OPC UA nodes are exposed by the reader",
+      "No AAS structure is published by the reader",
+      "Reader communicates with PLCs but does not expose its own AAS",
+      "Product identification and state are stored on NFC tags, not in OPC UA server"
+    ]
+  },
+  "process_types": {
+    "enum": "ProcessTypes",
+    "values": [
+      {
+        "value": 0,
+        "name": "ToStorageGlass",
+        "description": "Move to glass storage"
+      },
+      {
+        "value": 1,
+        "name": "StorageAlcohol",
+        "description": "Alcohol storage process"
+      },
+      {
+        "value": 2,
+        "name": "StorageNonAlcohol",
+        "description": "Non-alcohol storage process"
+      },
+      {
+        "value": 3,
+        "name": "Shaker",
+        "description": "Shaking process"
+      },
+      {
+        "value": 4,
+        "name": "Cleaner",
+        "description": "Cleaning process"
+      },
+      {
+        "value": 5,
+        "name": "SodaMake",
+        "description": "Soda making process"
+      },
+      {
+        "value": 6,
+        "name": "ToCustomer",
+        "description": "Delivery to customer"
+      },
+      {
+        "value": 7,
+        "name": "Transport",
+        "description": "Transport process",
+        "plc_aas_mapping": "Transport submodel"
+      },
+      {
+        "value": 8,
+        "name": "Buffer",
+        "description": "Buffer storage",
+        "plc_aas_mapping": "Cell submodel"
+      }
+    ]
+  }
+}

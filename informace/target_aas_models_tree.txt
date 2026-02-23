@@ -1,0 +1,94 @@
+================================================================================
+TARGET AAS MODELS - CANONICAL TREE VIEW
+Testbed 4.0 - PLC as OPC UA Server, Reader as Client, Transport in PLC only
+================================================================================
+Generated: 2026-02-20
+Datatypes: Bool, Int (Int16), DInt (Int32), Real, String (S7-1200 compatible)
+================================================================================
+
+TARGET_CELL_AAS (Manufacturing unit)
+--------------------------------------------------------------------------------
+Cell/
+├── Identification/
+│   ├── ID                    String   R    Cell/asset identifier
+│   └── Name                  String   R    Cell display name
+├── Status_System/
+│   ├── Ready                 Bool    R    Cell ready for work
+│   ├── Fault                 Bool    R    Fault state
+│   └── ErrorCode             Int     R    Error code (0 = none)
+├── Process/
+│   ├── InputPosition         String  R    Input position ID
+│   ├── OutputPosition        String  R    Output position ID
+│   ├── OutputPositionSr      String  R    Output position slot/struct (serial or index)
+│   └── SupportedProcessTypes String  R    Supported process type IDs
+├── Maintenance_minimal/
+│   └── MaintenanceRequired   Bool    R    (optional)
+[Optional]
+├── Communication/
+│   └── EndpointURL           String  R
+├── Queue_interface/
+│   ├── QueueStatus           String  R
+│   ├── QueueHistoryBuffer    String  R    Queue history status (array/list/buffer struct)
+│   ├── TotalMaxBuffer        Int     R
+│   ├── ItemCountP            Int     R
+│   └── ItemCountRP           Int     R
+└── Methods/
+    ├── FreeFromPosition(InputMessage: String) -> OutputMessage: String
+    ├── FreeFromQueue(InputMessage: String) -> OutputMessage: String
+    ├── GetStatus(InputMessage: String) -> OutputMessage: String
+    ├── GetSupported(InputMessage: String) -> OutputMessage: String
+    └── ReserveAction(InputMessage: String) -> OutputMessage: String
+
+Legend: R = Read, RW = ReadWrite
+
+================================================================================
+
+TARGET_PRODUCT_AAS (NFC product agent - mirror in PLC)
+--------------------------------------------------------------------------------
+Product/
+├── ProductCore/
+│   ├── ProductID             String  RW   [WRITABLE BY READER] Product ID
+│   ├── TagUID                String  RW   [WRITABLE BY READER] NFC UID as string
+│   ├── RecipeID_or_VariantID String  RW   [WRITABLE BY READER] Recipe/variant
+│   ├── State                 Int     RW   [WRITABLE BY READER] State enum/step
+│   ├── Timestamp             String  RW   [WRITABLE BY READER] Last update
+│   ├── ErrorCode             Int     RW   [WRITABLE BY READER] 0 = OK
+│   ├── SchemaVersion         String  R    (PLC/internal)
+│   ├── CurrentId             String  RW   [WRITABLE BY READER] Current/active product identifier
+│   └── CurrentPosition       String  RW   [WRITABLE BY READER] Current cell ID
+[Optional]
+├── Name                      String  RW   (PLC)
+├── Submodel                  String  R    (PLC)
+├── ActionStatus             String  RW   [WRITABLE BY READER] Transport/process status
+└── Methods/
+    └── ReportProduct(InputMessage: String) -> OutputMessage: String
+
+Direction: Reader → PLC for writable_by_reader nodes (Reader writes after NFC read).
+
+================================================================================
+
+TARGET_TRANSPORT_AAS (Robot - PLC only, no AAS in robot controller)
+--------------------------------------------------------------------------------
+Transport/
+├── CmdStart                  Bool    RW   Edge-triggered start (PLC/MES)
+├── CmdReset                  Bool    RW   Reset fault (PLC)
+├── TaskID                    String  RW   Current task ID (PLC)
+├── Ready                     Bool    R    Ready for new task
+├── Busy                      Bool    R    Task in progress
+├── Done                      Bool    R    Task completed
+├── Fault                     Bool    R    Fault state
+└── ErrorCode                 Int     R    Transport error code
+[Optional - multi-cell / queue]
+├── Queue_interface/
+│   ├── QueueStatus           String  R
+│   └── ActiveTaskID          String  R
+└── Lock_OwnerCellID/
+    ├── Lock                   Bool    R
+    └── OwnerCellID            String  R
+
+Note: Reader does not write Transport nodes; PLC controls robot. Reader uses
+      Cell ReserveAction / process flow to trigger transport indirectly.
+
+================================================================================
+END OF TREE
+================================================================================

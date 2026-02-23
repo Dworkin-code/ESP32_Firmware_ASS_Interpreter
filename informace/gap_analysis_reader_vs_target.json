@@ -1,0 +1,104 @@
+{
+  "metadata": {
+    "comparison": "Reader (OPC UA client + internal structures) vs Target AAS models",
+    "generated": "2026-02-20",
+    "note": "Reader does not expose OPC UA server; comparison is reader data/methods vs target contract for Product/Cell/Transport"
+  },
+  "target_model_extended": {
+    "variables_added": ["CurrentId", "OutputPositionSr", "QueueHistoryBuffer"],
+    "target_paths": {
+      "CurrentId": "Product/ProductCore/CurrentId",
+      "OutputPositionSr": "Cell/Process/OutputPositionSr",
+      "QueueHistoryBuffer": "Cell/Queue_interface/QueueHistoryBuffer"
+    },
+    "provided_by_reader": {
+      "CurrentId": "no - reader has sUid but does not write to PLC",
+      "OutputPositionSr": "no - Cell/PLC only",
+      "QueueHistoryBuffer": "no - Cell/PLC only"
+    }
+  },
+  "reader_summary": {
+    "role": "OPC UA client",
+    "opcua_server": false,
+    "internal_structures": ["TCardInfo", "TRecipeInfo", "TRecipeStep", "CellInfo"],
+    "methods_called_on_plc": ["Inquire", "IsValid", "Rezervation", "DoProcess", "IsFinished", "Occupancy"],
+    "direct_plc_variable_writes": "None (reader does not write CurrentId, CurrentPosition, ActionStatus per existing reports)"
+  },
+  "by_model": {
+    "TARGET_CELL_AAS": {
+      "reader_relevance": "Reader consumes cell info (CellInfo.IDofCell, IP, ProcessTypes) and calls cell methods. Reader does not host Cell AAS.",
+      "missing_elements": "N/A - Reader is client; Cell AAS is on PLC.",
+      "extra_elements_in_reader": [
+        { "item": "CellInfo.IDofCell", "type": "uint16_t", "target_equivalent": "Cell/Identification/ID", "direction": "Reader uses for own identity and position reporting" },
+        { "item": "CellInfo.IPAdress", "target_equivalent": "Cell/Communication/EndpointURL (optional)" },
+        { "item": "CellInfo.ProcessTypes", "target_equivalent": "Cell/Process/SupportedProcessTypes" }
+      ],
+      "rename_candidates": [],
+      "datatype_mismatches": [
+        { "reader": "CellInfo.IDofCell uint16_t", "target": "Cell/Identification/ID String", "recommendation": "Convert to string when writing to PLC or when aligning with target" }
+      ],
+      "access_level_mismatches": "Reader only reads cell data via custom methods (Inquire, etc.); target Cell nodes are Read on PLC - no conflict.",
+      "synchronization_gaps": "Reader calls custom Inquire/Rezervation/DoProcess/IsFinished/Occupancy instead of PLC AAS methods (GetSupported, ReserveAction, GetStatus, etc.). Aligning reader to call PLC ReserveAction and to write Product/position to PLC would reduce gaps."
+    },
+    "TARGET_PRODUCT_AAS": {
+      "reader_relevance": "Reader owns product source (NFC tag). Target ProductCore is mirrored in PLC; reader must write writable_by_reader nodes.",
+      "missing_elements": [
+        { "path": "Product/ProductCore/Timestamp", "reader_source": "None", "description": "Reader does not currently send timestamp to PLC" },
+        { "path": "Product/ProductCore/SchemaVersion", "reader_source": "None", "description": "Schema version is PLC/internal" },
+        { "path": "Product/ProductCore/ErrorCode", "reader_source": "Implicit in recipe/step errors", "description": "Could be derived and written" }
+      ],
+      "extra_elements_in_reader": [
+        { "item": "TCardInfo.sUid", "type": "uint8_t[7]", "target_equivalent": "Product/ProductCore/TagUID, ProductID", "direction": "Reader→PLC (must convert to string and write)" },
+        { "item": "TRecipeInfo.ID", "type": "uint8_t", "target_equivalent": "Product/ProductCore/RecipeID_or_VariantID or ProductID" },
+        { "item": "TRecipeInfo.ActualRecipeStep", "target_equivalent": "Product/ProductCore/State" },
+        { "item": "TRecipeInfo.RecipeDone", "target_equivalent": "Product/ProductCore/State (done state)" },
+        { "item": "TRecipeStep.* (ProcessCellID, TransportCellID, etc.)", "target_equivalent": "Product optional / ActionStatus" }
+      ],
+      "rename_candidates": [
+        { "reader_field": "sUid", "target_path": "Product/ProductCore/TagUID or ProductID", "suggested_usage": "Convert to hex string, write to PLC CurrentId and/or dedicated TagUID if added" },
+        { "reader_field": "TRecipeInfo.ID", "target_path": "Product/ProductCore/RecipeID_or_VariantID" },
+        { "reader_field": "ActualRecipeStep / RecipeDone", "target_path": "Product/ProductCore/State" }
+      ],
+      "datatype_mismatches": [
+        { "reader": "sUid uint8_t[7]", "target": "TagUID/ProductID String", "severity": "HIGH", "recommendation": "Convert UID to string (e.g. hex) when writing to PLC" },
+        { "reader": "TRecipeInfo.ID uint8_t", "target": "RecipeID_or_VariantID String", "recommendation": "Convert to string" },
+        { "reader": "ActualRecipeStep uint8_t", "target": "State Int", "recommendation": "Compatible; write as Int or string" },
+        { "reader": "CellInfo.IDofCell uint16_t", "target": "CurrentPosition String", "recommendation": "Convert to string when writing position to PLC" }
+      ],
+      "access_level_mismatches": "Target marks ProductID, TagUID, State, Timestamp, ErrorCode, CurrentId, CurrentPosition as writable by reader. Reader currently does not write any PLC variables - implementation gap.",
+      "synchronization_gaps": [
+        { "gap": "Product ID not written to PLC", "reader_source": "TCardInfo.sUid", "plc_target": "CurrentId (ns=1;i=6101)", "severity": "CRITICAL", "action": "After NFC read, convert UID to string, write to CurrentId" },
+        { "gap": "Current position not written to PLC", "reader_source": "CellInfo.IDofCell", "plc_target": "CurrentPosition (ns=1;i=6102)", "severity": "CRITICAL", "action": "On tag detected, write cell ID (as string) to CurrentPosition" },
+        { "gap": "Recipe/state not written to PLC", "reader_source": "TRecipeInfo (ActualRecipeStep, RecipeDone, ID)", "plc_target": "No dedicated State/RecipeID variables in current PLC", "severity": "HIGH", "action": "Add PLC variables per target or use ActionStatus string" },
+        { "gap": "Transport/process status not written", "reader_source": "TRecipeStep.IsTransport, IsProcess", "plc_target": "ActionStatus (ns=1;i=6100)", "severity": "HIGH", "action": "Update ActionStatus when transport/process state changes" }
+      ]
+    },
+    "TARGET_TRANSPORT_AAS": {
+      "reader_relevance": "Transport AAS is PLC-only; reader does not control transport. Reader triggers transport indirectly via cell reservation/process.",
+      "missing_elements": "N/A - Reader does not implement or own Transport AAS.",
+      "extra_elements_in_reader": [
+        { "item": "TRecipeStep.TransportCellID, TransportCellReservationID, NeedForTransport, IsTransport", "target_equivalent": "Transport task/queue (handled by PLC/Cell ReserveAction)" }
+      ],
+      "rename_candidates": [],
+      "datatype_mismatches": "None - reader does not read/write Transport nodes.",
+      "access_level_mismatches": "None.",
+      "synchronization_gaps": "Reader uses Rezervation/DoProcess to reserve and start process; transport is one process type. No direct Transport AAS sync required from reader; PLC owns Transport."
+    }
+  },
+  "method_alignment": {
+    "reader_uses": ["Inquire", "IsValid", "Rezervation", "DoProcess", "IsFinished", "Occupancy"],
+    "plc_aas_methods": ["FreeFromPosition", "FreeFromQueue", "GetStatus", "GetSupported", "ReportProduct", "ReserveAction"],
+    "gaps": [
+      { "reader": "Rezervation", "plc_aas": "ReserveAction (ns=1;i=7005)", "recommendation": "Use PLC ReserveAction with String argument (encode reservation ID)" },
+      { "reader": "IsFinished", "plc_aas": "GetStatus (ns=1;i=7002)", "recommendation": "Consider using GetStatus or align semantics" },
+      { "reader": "Inquire", "plc_aas": "GetSupported (ns=1;i=7003)", "recommendation": "Map Inquire to GetSupported if semantics match, or keep custom" },
+      { "reader": "DoProcess", "plc_aas": "None", "recommendation": "No direct AAS method; keep or define as cell-specific" },
+      { "reader": "Occupancy", "plc_aas": "None", "recommendation": "Could map to Cell occupancy variable if added to target" }
+    ]
+  },
+  "summary": {
+    "cell": "Reader uses cell info and custom methods; no Cell AAS hosted on reader. Align method calls to PLC AAS where possible.",
+    "product": "Reader has all ProductCore source data (UID, recipe, state) but does not write to PLC. Critical: implement writes of ProductID (from UID), CurrentPosition, and optionally State/ActionStatus to meet target contract.",
+    "transport": "Reader does not interact with Transport AAS; no gaps from reader side."
+  }
+}

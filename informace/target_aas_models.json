@@ -1,0 +1,104 @@
+{
+  "metadata": {
+    "project": "AAS implementation in Testbed 4.0",
+    "generated": "2026-02-20",
+    "architecture": "PLC = OPC UA server; Reader = OPC UA client; Robot controlled by PLC; Transport AAS in PLC only",
+    "datatype_convention": "S7-1200 compatible: Bool, Int (Int16), DInt (Int32), Real, String"
+  },
+  "TARGET_CELL_AAS": {
+    "description": "Manufacturing unit (cell) AAS - exposed by PLC per cell",
+    "canonical_prefix": "Cell",
+    "minimal_required": {
+      "Identification": {
+        "ID": { "data_type": "String", "access": "Read", "description": "Cell/asset identifier" },
+        "Name": { "data_type": "String", "access": "Read", "description": "Cell display name" }
+      },
+      "Status_System": {
+        "Ready": { "data_type": "Bool", "access": "Read", "description": "Cell ready for work" },
+        "Fault": { "data_type": "Bool", "access": "Read", "description": "Fault state" },
+        "ErrorCode": { "data_type": "Int", "access": "Read", "description": "Error code (0 = none)" }
+      },
+      "Process": {
+        "InputPosition": { "data_type": "String", "access": "Read", "description": "Input position ID" },
+        "OutputPosition": { "data_type": "String", "access": "Read", "description": "Output position ID" },
+        "OutputPositionSr": { "data_type": "String", "access": "Read", "description": "Output position slot/struct (serial or index)" },
+        "SupportedProcessTypes": { "data_type": "String", "access": "Read", "description": "Comma-separated or encoded process type IDs" }
+      },
+      "Maintenance_minimal": {
+        "MaintenanceRequired": { "data_type": "Bool", "access": "Read", "description": "Maintenance flag (optional minimal)" }
+      }
+    },
+    "optional_extensions": {
+      "Communication": {
+        "EndpointURL": { "data_type": "String", "access": "Read", "description": "OPC UA endpoint if needed for discovery" }
+      },
+      "Queue_interface": {
+        "QueueStatus": { "data_type": "String", "access": "Read", "description": "Queue state" },
+        "QueueHistoryBuffer": { "data_type": "String", "access": "Read", "description": "Queue history status (array/list/buffer struct)" },
+        "TotalMaxBuffer": { "data_type": "Int", "access": "Read", "description": "Max buffer size" },
+        "ItemCountP": { "data_type": "Int", "access": "Read", "description": "Items in process" },
+        "ItemCountRP": { "data_type": "Int", "access": "Read", "description": "Reserved/processed count" }
+      },
+      "Methods": {
+        "FreeFromPosition": { "input": "String", "output": "String", "description": "Free position" },
+        "FreeFromQueue": { "input": "String", "output": "String", "description": "Free queue slot" },
+        "GetStatus": { "input": "String", "output": "String", "description": "Get cell status" },
+        "GetSupported": { "input": "String", "output": "String", "description": "Get supported operations" },
+        "ReserveAction": { "input": "String", "output": "String", "description": "Reserve process/transport" }
+      }
+    }
+  },
+  "TARGET_PRODUCT_AAS": {
+    "description": "NFC-based product agent - data mirrored in PLC; reader owns source (NFC), PLC holds mirror",
+    "canonical_prefix": "Product",
+    "ProductCore_contract": {
+      "minimal_required": {
+        "ProductID": { "data_type": "String", "access": "ReadWrite", "writable_by_reader": true, "ownership": "Reader", "direction": "Reader→PLC", "description": "Product identifier (e.g. from TagUID string)" },
+        "TagUID": { "data_type": "String", "access": "ReadWrite", "writable_by_reader": true, "ownership": "Reader", "direction": "Reader→PLC", "description": "NFC tag UID as string (7 bytes hex or decimal)" },
+        "RecipeID_or_VariantID": { "data_type": "String", "access": "ReadWrite", "writable_by_reader": true, "ownership": "Reader", "direction": "Reader→PLC", "description": "Recipe or variant identifier" },
+        "State": { "data_type": "Int", "access": "ReadWrite", "writable_by_reader": true, "ownership": "Shared", "direction": "Reader→PLC", "description": "Current state enum (e.g. step index or state id)" },
+        "Timestamp": { "data_type": "String", "access": "ReadWrite", "writable_by_reader": true, "ownership": "Reader", "direction": "Reader→PLC", "description": "Last update timestamp (ISO8601 or ticks)" },
+        "ErrorCode": { "data_type": "Int", "access": "ReadWrite", "writable_by_reader": true, "ownership": "Shared", "direction": "Bidirectional", "description": "0 = OK" },
+        "SchemaVersion": { "data_type": "String", "access": "Read", "writable_by_reader": false, "ownership": "PLC", "direction": "Internal", "description": "ProductCore schema version" }
+      },
+      "position_and_reporting": {
+        "CurrentId": { "data_type": "String", "access": "ReadWrite", "writable_by_reader": true, "ownership": "Reader", "direction": "Reader→PLC", "description": "Current/active product identifier (mirror of ProductID)" },
+        "CurrentPosition": { "data_type": "String", "access": "ReadWrite", "writable_by_reader": true, "ownership": "Reader", "direction": "Reader→PLC", "description": "Current cell/position ID" }
+      }
+    },
+    "writable_by_reader": ["ProductID", "TagUID", "RecipeID_or_VariantID", "State", "Timestamp", "ErrorCode", "CurrentId", "CurrentPosition"],
+    "optional_extensions": {
+      "Name": { "data_type": "String", "access": "ReadWrite", "writable_by_reader": false, "ownership": "PLC", "direction": "Internal" },
+      "Submodel": { "data_type": "String", "access": "Read", "writable_by_reader": false, "ownership": "PLC", "direction": "Internal" },
+      "ActionStatus": { "data_type": "String", "access": "ReadWrite", "writable_by_reader": true, "ownership": "Shared", "direction": "Reader→PLC", "description": "Transport/process action status string" }
+    },
+    "Methods": {
+      "ReportProduct": { "input": "String", "output": "String", "description": "Report product to cell (PLC method)" }
+    }
+  },
+  "TARGET_TRANSPORT_AAS": {
+    "description": "Robot transport - implemented only in PLC; robot has no AAS, controlled by PLC",
+    "canonical_prefix": "Transport",
+    "minimal_required": {
+      "CmdStart": { "data_type": "Bool", "access": "ReadWrite", "ownership": "PLC", "direction": "PLC internal / MES", "description": "Edge-triggered start command" },
+      "CmdReset": { "data_type": "Bool", "access": "ReadWrite", "ownership": "PLC", "direction": "PLC internal", "description": "Reset fault/state" },
+      "TaskID": { "data_type": "String", "access": "ReadWrite", "ownership": "PLC", "direction": "PLC internal", "description": "Current task identifier" },
+      "Ready": { "data_type": "Bool", "access": "Read", "ownership": "PLC", "direction": "PLC→Client", "description": "Transport ready for new task" },
+      "Busy": { "data_type": "Bool", "access": "Read", "ownership": "PLC", "direction": "PLC→Client", "description": "Task in progress" },
+      "Done": { "data_type": "Bool", "access": "Read", "ownership": "PLC", "direction": "PLC→Client", "description": "Task completed" },
+      "Fault": { "data_type": "Bool", "access": "Read", "ownership": "PLC", "direction": "PLC→Client", "description": "Fault state" },
+      "ErrorCode": { "data_type": "Int", "access": "Read", "ownership": "PLC", "direction": "PLC→Client", "description": "Transport error code" }
+    },
+    "optional_extensions": {
+      "Queue_interface": {
+        "QueueStatus": { "data_type": "String", "access": "Read", "description": "Queue state for multi-cell" },
+        "ActiveTaskID": { "data_type": "String", "access": "Read", "description": "Currently executed task ID" }
+      },
+      "Lock_OwnerCellID": {
+        "Lock": { "data_type": "Bool", "access": "Read", "description": "Transport locked" },
+        "OwnerCellID": { "data_type": "String", "access": "Read", "description": "Cell that owns current reservation" }
+      }
+    },
+    "note": "Reader does not control transport directly; PLC commands robot. Reader may trigger transport indirectly via cell ReserveAction / process flow."
+  }
+}

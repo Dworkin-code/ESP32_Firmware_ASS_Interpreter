@@ -1,0 +1,420 @@
+{
+  "comparison_metadata": {
+    "reader_type": "OPC_UA_CLIENT",
+    "plc_type": "OPC_UA_SERVER",
+    "comparison_date": "2026-02-20",
+    "note": "Reader does not implement OPC UA server - comparison is based on reader's client usage patterns and internal data structures vs PLC's server structure"
+  },
+  "architectural_differences": {
+    "reader_architecture": {
+      "type": "OPC UA Client",
+      "description": "Reader acts as OPC UA client, reads NFC tags, communicates with PLCs via custom methods",
+      "exposes_opcua_server": false,
+      "has_aas_structure": false
+    },
+    "plc_architecture": {
+      "type": "OPC UA Server",
+      "description": "PLC exposes AAS structure via OPC UA server with variables and methods",
+      "exposes_opcua_server": true,
+      "has_aas_structure": true
+    },
+    "critical_difference": "Reader does NOT expose an AAS structure via OPC UA. It only consumes PLC AAS via client calls."
+  },
+  "missing_in_reader": {
+    "opcua_server": {
+      "severity": "CRITICAL",
+      "description": "Reader does not implement OPC UA server",
+      "items": [
+        {
+          "item": "OPC UA Server instance",
+          "plc_equivalent": "Full OPC UA server with namespace",
+          "impact": "Reader cannot expose AAS structure to other systems"
+        },
+        {
+          "item": "AAS Variable nodes",
+          "plc_equivalent": "14 published variables (ActionStatus, CurrentId, CurrentPosition, etc.)",
+          "impact": "No AAS data exposed by reader"
+        },
+        {
+          "item": "AAS Method nodes",
+          "plc_equivalent": "6 methods (FreeFromPosition, FreeFromQueue, GetStatus, GetSupported, ReportProduct, ReserveAction)",
+          "impact": "Reader cannot provide AAS methods"
+        },
+        {
+          "item": "Namespace definition",
+          "plc_equivalent": "Namespace URI: opc.tcp://192.168.0.1",
+          "impact": "No namespace to organize AAS elements"
+        }
+      ]
+    },
+    "direct_variable_access": {
+      "severity": "HIGH",
+      "description": "Reader does not directly read/write PLC AAS variables",
+      "items": [
+        {
+          "item": "CurrentId variable access",
+          "plc_node": "ns=1;i=6101",
+          "reader_equivalent": "NFC Tag UID (sUid)",
+          "impact": "Product ID stored on NFC tag, not synchronized to PLC CurrentId variable"
+        },
+        {
+          "item": "CurrentPosition variable access",
+          "plc_node": "ns=1;i=6102",
+          "reader_equivalent": "CellInfo.IDofCell (static)",
+          "impact": "Position not written to PLC CurrentPosition variable"
+        },
+        {
+          "item": "ActionStatus variable access",
+          "plc_node": "ns=1;i=6100",
+          "reader_equivalent": "TRecipeStep.IsTransport, IsProcess flags",
+          "impact": "Transport/process status not synchronized to PLC ActionStatus"
+        },
+        {
+          "item": "ID variable access",
+          "plc_node": "ns=1;i=6200",
+          "reader_equivalent": "TRecipeInfo.ID",
+          "impact": "Product ID not synchronized to PLC ID variable"
+        },
+        {
+          "item": "Name variable access",
+          "plc_node": "ns=1;i=6202",
+          "reader_equivalent": "None",
+          "impact": "Product name not available in reader, cannot sync to PLC"
+        },
+        {
+          "item": "Submodel variable access",
+          "plc_node": "ns=1;i=6204",
+          "reader_equivalent": "None",
+          "impact": "AAS Submodel reference not available in reader"
+        }
+      ]
+    },
+    "plc_methods_not_used": {
+      "severity": "MEDIUM",
+      "description": "Reader does not call PLC AAS methods",
+      "items": [
+        {
+          "item": "FreeFromPosition",
+          "plc_node": "ns=1;i=7000",
+          "reader_equivalent": "None",
+          "impact": "Reader cannot free positions via PLC method"
+        },
+        {
+          "item": "FreeFromQueue",
+          "plc_node": "ns=1;i=7001",
+          "reader_equivalent": "None",
+          "impact": "Reader cannot free queue via PLC method"
+        },
+        {
+          "item": "GetStatus",
+          "plc_node": "ns=1;i=7002",
+          "reader_equivalent": "IsFinished method (custom)",
+          "impact": "Reader uses custom IsFinished instead of PLC GetStatus"
+        },
+        {
+          "item": "GetSupported",
+          "plc_node": "ns=1;i=7003",
+          "reader_equivalent": "None",
+          "impact": "Reader cannot query supported operations via PLC method"
+        },
+        {
+          "item": "ReportProduct",
+          "plc_node": "ns=1;i=7004",
+          "reader_equivalent": "None",
+          "impact": "Reader cannot report product information via PLC method"
+        },
+        {
+          "item": "ReserveAction",
+          "plc_node": "ns=1;i=7005",
+          "reader_equivalent": "Rezervation method (custom)",
+          "impact": "Reader uses custom Rezervation instead of PLC ReserveAction"
+        }
+      ]
+    }
+  },
+  "extra_in_reader": {
+    "custom_opcua_methods": {
+      "severity": "INFO",
+      "description": "Reader uses custom OPC UA methods not present in PLC AAS",
+      "items": [
+        {
+          "item": "Inquire",
+          "description": "Query available cells for process type",
+          "plc_equivalent": "None - custom method",
+          "impact": "Reader-specific functionality for cell discovery"
+        },
+        {
+          "item": "IsValid",
+          "description": "Validate reservation status",
+          "plc_equivalent": "None - custom method",
+          "impact": "Reader-specific reservation validation"
+        },
+        {
+          "item": "Rezervation",
+          "description": "Reserve cell (custom implementation)",
+          "plc_equivalent": "ReserveAction (ns=1;i=7005)",
+          "impact": "Different method signature/implementation than PLC ReserveAction"
+        },
+        {
+          "item": "DoProcess",
+          "description": "Start process execution",
+          "plc_equivalent": "None - custom method",
+          "impact": "Reader-specific process control"
+        },
+        {
+          "item": "IsFinished",
+          "description": "Check process completion",
+          "plc_equivalent": "GetStatus (ns=1;i=7002) - partial",
+          "impact": "Different method signature than PLC GetStatus"
+        },
+        {
+          "item": "Occupancy",
+          "description": "Report cell occupancy",
+          "plc_equivalent": "None - custom method",
+          "impact": "Reader-specific occupancy reporting"
+        }
+      ]
+    },
+    "internal_data_structures": {
+      "severity": "INFO",
+      "description": "Reader has internal data structures not exposed via OPC UA",
+      "items": [
+        {
+          "item": "TCardInfo",
+          "description": "Complete NFC tag data structure",
+          "plc_equivalent": "Distributed across multiple PLC variables",
+          "impact": "Data stored on NFC tag, not in PLC"
+        },
+        {
+          "item": "TRecipeInfo",
+          "description": "Recipe metadata and state",
+          "plc_equivalent": "State variables (implicit)",
+          "impact": "Recipe state stored on NFC tag"
+        },
+        {
+          "item": "TRecipeStep[]",
+          "description": "Array of recipe steps",
+          "plc_equivalent": "Process/Transport state (implicit)",
+          "impact": "Recipe steps stored on NFC tag"
+        },
+        {
+          "item": "CellInfo",
+          "description": "Cell/PLC configuration",
+          "plc_equivalent": "Cell identification (implicit)",
+          "impact": "Cell info stored in reader configuration"
+        }
+      ]
+    }
+  },
+  "datatype_mismatches": {
+    "product_identification": {
+      "severity": "HIGH",
+      "reader_type": "uint8_t[7] (NFC UID)",
+      "plc_type": "String",
+      "plc_node": "ns=1;i=6101 (CurrentId) or ns=1;i=6200 (ID)",
+      "description": "Reader stores Product ID as 7-byte UID array, PLC expects String",
+      "impact": "Requires conversion when synchronizing Product ID"
+    },
+    "current_position": {
+      "severity": "MEDIUM",
+      "reader_type": "uint16_t (CellInfo.IDofCell)",
+      "plc_type": "String",
+      "plc_node": "ns=1;i=6102 (CurrentPosition)",
+      "description": "Reader stores position as uint16_t, PLC expects String",
+      "impact": "Requires string conversion when synchronizing position"
+    },
+    "recipe_state": {
+      "severity": "MEDIUM",
+      "reader_type": "Multiple fields in TRecipeInfo/TRecipeStep structures",
+      "plc_type": "String (implicit in ActionStatus)",
+      "plc_node": "ns=1;i=6100 (ActionStatus)",
+      "description": "Reader has structured state data, PLC has single String variable",
+      "impact": "State information loss when mapping to PLC String format"
+    },
+    "reservation_id": {
+      "severity": "LOW",
+      "reader_type": "uint16_t",
+      "plc_type": "String (in method arguments)",
+      "plc_node": "Methods use String InputMessage",
+      "description": "Reader uses uint16_t for reservation IDs, PLC methods expect String",
+      "impact": "Requires serialization/deserialization"
+    }
+  },
+  "hierarchy_mismatches": {
+    "reader_hierarchy": {
+      "description": "Reader has no OPC UA hierarchy (client-only)",
+      "structure": "N/A - No OPC UA server"
+    },
+    "plc_hierarchy": {
+      "description": "PLC has organized AAS hierarchy",
+      "structure": {
+        "root": "ObjectsFolder",
+        "variables": {
+          "dynamic": "PLCServiceProvider/Variables/Dynamic/",
+          "static": "PLCServiceProvider/Variables/Static/"
+        },
+        "methods": "Under ObjectsFolder or organized by function"
+      }
+    },
+    "impact": "Reader cannot provide hierarchical AAS structure - it only consumes PLC hierarchy"
+  },
+  "accesslevel_mismatches": {
+    "reader_access": {
+      "description": "Reader has no OPC UA variables (client-only)",
+      "access_levels": "N/A"
+    },
+    "plc_access": {
+      "description": "All PLC variables are ReadWrite",
+      "access_levels": "ReadWrite for all 14 variables"
+    },
+    "impact": "Reader cannot expose variables with access levels - it only reads/writes PLC variables via client calls"
+  },
+  "semantic_conflicts": {
+    "product_id_storage": {
+      "severity": "HIGH",
+      "description": "Product ID stored in different locations",
+      "reader_location": "NFC Tag UID (sUid[7])",
+      "plc_location": "CurrentId variable (ns=1;i=6101) or ID variable (ns=1;i=6200)",
+      "conflict": "Reader reads Product ID from NFC tag but does not write it to PLC variables",
+      "recommendation": "Reader should write NFC UID to PLC CurrentId variable after reading tag"
+    },
+    "position_tracking": {
+      "severity": "HIGH",
+      "description": "Position tracking mismatch",
+      "reader_location": "Static CellInfo.IDofCell (reader's own ID)",
+      "plc_location": "CurrentPosition variable (ns=1;i=6102)",
+      "conflict": "Reader knows its own cell ID but does not update PLC CurrentPosition when product arrives",
+      "recommendation": "Reader should write its CellInfo.IDofCell to PLC CurrentPosition when NFC tag is detected"
+    },
+    "transport_status": {
+      "severity": "MEDIUM",
+      "description": "Transport status synchronization mismatch",
+      "reader_location": "TRecipeStep.IsTransport flag (on NFC tag)",
+      "plc_location": "ActionStatus variable (ns=1;i=6100)",
+      "conflict": "Reader tracks transport status on NFC tag but does not sync to PLC ActionStatus",
+      "recommendation": "Reader should update PLC ActionStatus when transport state changes"
+    },
+    "reservation_methods": {
+      "severity": "MEDIUM",
+      "description": "Different reservation method implementations",
+      "reader_method": "Rezervation (custom, takes uint16_t reservation ID)",
+      "plc_method": "ReserveAction (ns=1;i=7005, takes String InputMessage)",
+      "conflict": "Method signatures and implementations differ",
+      "recommendation": "Reader should use PLC ReserveAction method instead of custom Rezervation, or align method signatures"
+    },
+    "status_query_methods": {
+      "severity": "LOW",
+      "description": "Different status query methods",
+      "reader_method": "IsFinished (custom, returns boolean)",
+      "plc_method": "GetStatus (ns=1;i=7002, takes/returns String)",
+      "conflict": "Different method signatures for status queries",
+      "recommendation": "Consider using PLC GetStatus method or align method signatures"
+    },
+    "recipe_state_storage": {
+      "severity": "MEDIUM",
+      "description": "Recipe state stored on NFC tag, not in PLC",
+      "reader_location": "TRecipeInfo and TRecipeStep[] structures on NFC tag",
+      "plc_location": "Implicit in ActionStatus and other state variables",
+      "conflict": "Recipe state is distributed - reader has detailed state on NFC tag, PLC has summary in variables",
+      "recommendation": "Consider synchronizing key recipe state fields to PLC variables for monitoring"
+    }
+  },
+  "sync_critical_mismatches": {
+    "critical_sync_issues": [
+      {
+        "issue": "Product ID not synchronized",
+        "severity": "CRITICAL",
+        "reader_source": "NFC Tag UID (sUid)",
+        "plc_target": "CurrentId (ns=1;i=6101)",
+        "current_behavior": "Reader reads Product ID from NFC tag but does not write to PLC",
+        "required_behavior": "Reader should write NFC UID (converted to string) to PLC CurrentId variable",
+        "impact": "PLC cannot track which product is at reader location"
+      },
+      {
+        "issue": "Current Position not synchronized",
+        "severity": "CRITICAL",
+        "reader_source": "CellInfo.IDofCell",
+        "plc_target": "CurrentPosition (ns=1;i=6102)",
+        "current_behavior": "Reader knows its cell ID but does not update PLC",
+        "required_behavior": "Reader should write its cell ID (as string) to PLC CurrentPosition when tag detected",
+        "impact": "PLC cannot track product location in system"
+      },
+      {
+        "issue": "Transport status not synchronized",
+        "severity": "HIGH",
+        "reader_source": "TRecipeStep.IsTransport flag",
+        "plc_target": "ActionStatus (ns=1;i=6100)",
+        "current_behavior": "Reader tracks transport status on NFC tag but does not sync to PLC",
+        "required_behavior": "Reader should update PLC ActionStatus when transport completes",
+        "impact": "PLC cannot monitor transport execution status"
+      },
+      {
+        "issue": "Reservation method mismatch",
+        "severity": "HIGH",
+        "reader_method": "Rezervation (custom)",
+        "plc_method": "ReserveAction (ns=1;i=7005)",
+        "current_behavior": "Reader uses custom reservation method",
+        "required_behavior": "Reader should use PLC ReserveAction method for AAS compliance",
+        "impact": "Inconsistent reservation handling, not using standard AAS method"
+      }
+    ]
+  },
+  "alignment_recommendations": {
+    "immediate_actions": [
+      {
+        "action": "Implement Product ID synchronization",
+        "description": "After reading NFC tag UID, convert to string and write to PLC CurrentId variable (ns=1;i=6101)",
+        "priority": "CRITICAL",
+        "implementation": "Add OPC UA variable write after NFC tag read"
+      },
+      {
+        "action": "Implement Position synchronization",
+        "description": "When NFC tag is detected, write reader's CellInfo.IDofCell (as string) to PLC CurrentPosition variable (ns=1;i=6102)",
+        "priority": "CRITICAL",
+        "implementation": "Add OPC UA variable write in tag detection handler"
+      },
+      {
+        "action": "Replace custom Rezervation with PLC ReserveAction",
+        "description": "Use PLC ReserveAction method (ns=1;i=7005) instead of custom Rezervation method",
+        "priority": "HIGH",
+        "implementation": "Modify reservation code to call PLC ReserveAction with proper String argument"
+      },
+      {
+        "action": "Synchronize Transport Status",
+        "description": "Update PLC ActionStatus variable (ns=1;i=6100) when TRecipeStep.IsTransport changes",
+        "priority": "HIGH",
+        "implementation": "Add OPC UA variable write when transport state changes"
+      }
+    ],
+    "optional_improvements": [
+      {
+        "action": "Use PLC GetStatus method",
+        "description": "Consider using PLC GetStatus (ns=1;i=7002) instead of custom IsFinished",
+        "priority": "MEDIUM"
+      },
+      {
+        "action": "Synchronize Recipe State",
+        "description": "Consider writing key recipe state fields (ActualRecipeStep, RecipeDone) to PLC variables",
+        "priority": "LOW"
+      },
+      {
+        "action": "Implement OPC UA Server (future)",
+        "description": "Consider implementing OPC UA server on reader to expose its own AAS structure",
+        "priority": "LOW",
+        "note": "Major architectural change - would require significant refactoring"
+      }
+    ]
+  },
+  "summary_statistics": {
+    "plc_variables": 14,
+    "plc_methods": 6,
+    "reader_opcua_variables": 0,
+    "reader_opcua_methods_exposed": 0,
+    "reader_custom_methods_used": 6,
+    "reader_internal_structures": 4,
+    "critical_mismatches": 2,
+    "high_severity_mismatches": 4,
+    "medium_severity_mismatches": 3,
+    "low_severity_mismatches": 2
+  }
+}
