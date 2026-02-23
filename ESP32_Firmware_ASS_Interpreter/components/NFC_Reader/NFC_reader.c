@@ -665,6 +665,8 @@ uint8_t NFC_LoadTRecipeInfoStructure(pn532_t *aNFC, TCardInfo *aCardInfo)
             neopixel_SetPixel(*Light,&Svetlo,1);
     return 2;
   }
+  /* AAS fix: persist UID into TCardInfo so sr_id and ReportProduct use real tag identity */
+  NFC_saveUID(aCardInfo, iuid, iuidLength);
   aCardInfo->TRecipeInfoLoaded = true;
   Svetlo.rgb = 0;
             neopixel_SetPixel(*Light,&Svetlo,1);
