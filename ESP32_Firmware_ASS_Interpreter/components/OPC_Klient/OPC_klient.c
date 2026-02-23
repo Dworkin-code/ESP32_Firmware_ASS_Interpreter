@@ -2,6 +2,8 @@
 #include "NFC_recipes.h"
 #include <inttypes.h>
 #include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
 
 //#define OPC_KLIENT_ALL_DEBUG_EN 1
 //#define OPC_KLIENT_DEBUG_EN 1
@@ -310,12 +312,16 @@ uint8_t Inquire(CellInfo aCellInfo, uint16_t IDInterpreter, uint8_t TypeOfProces
     UA_StatusCode retval = UA_Client_call(management_client, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), UA_NODEID_STRING(1, "Inquire"), 5, input, &outputSize, &output);
     if (retval == UA_STATUSCODE_GOOD)
     {
-        aRezervace->IDofReservation = *(UA_UInt16 *)output[0].data;
-        aRezervace->Price = *(UA_Float *)output[1].data;
-        aRezervace->TimeOfReservation = *(UA_DateTime *)output[2].data;
-        aRezervace->ProcessType = TypeOfProcess;
-        aRezervace->IDofCell = aCellInfo.IDofCell;
-        UA_Array_delete(output, outputSize, &UA_TYPES[UA_TYPES_VARIANT]);
+        if (output && outputSize >= 3 && output[0].data && output[1].data && output[2].data)
+        {
+            aRezervace->IDofReservation = *(UA_UInt16 *)output[0].data;
+            aRezervace->Price = *(UA_Float *)output[1].data;
+            aRezervace->TimeOfReservation = *(UA_DateTime *)output[2].data;
+            aRezervace->ProcessType = TypeOfProcess;
+            aRezervace->IDofCell = aCellInfo.IDofCell;
+        }
+        if (output)
+            UA_Array_delete(output, outputSize, &UA_TYPES[UA_TYPES_VARIANT]);
     }
     else
     {
@@ -349,8 +355,10 @@ uint8_t GetInquireIsValid(CellInfo aCellInfo, Reservation *aRezervace, bool *Zme
     UA_StatusCode retval = UA_Client_call(management_client, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), UA_NODEID_STRING(1, "IsValid"), 1, &input, &outputSize, &output);
     if (retval == UA_STATUSCODE_GOOD)
     {
-        *Zmena = *(UA_Boolean *)output[3].data;
-        UA_Array_delete(output, outputSize, &UA_TYPES[UA_TYPES_VARIANT]);
+        if (output && outputSize >= 4 && output[3].data)
+            *Zmena = *(UA_Boolean *)output[3].data;
+        if (output)
+            UA_Array_delete(output, outputSize, &UA_TYPES[UA_TYPES_VARIANT]);
     }
     else
     {
@@ -383,16 +391,21 @@ uint8_t Reserve(CellInfo aCellInfo, Reservation *aRezervacePuvod, bool *Rezervov
     UA_StatusCode retval = UA_Client_call(management_client, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), UA_NODEID_STRING(1, "Rezervation"), 1, &input, &outputSize, &output);
     if (retval == UA_STATUSCODE_GOOD)
     {
-        *Rezervovano = *(UA_Boolean *)output[3].data;
-        if(aRezervaceNova != NULL)
+        if (output && outputSize >= 4)
         {
-            aRezervaceNova->IDofCell = aRezervacePuvod->IDofCell;
-            aRezervaceNova->IDofReservation = *(UA_UInt16 *)output[0].data;
-            aRezervaceNova->Price = *(UA_Float *)output[1].data;
-            aRezervaceNova->TimeOfReservation = *(UA_DateTime *)output[2].data;
-            aRezervaceNova->ProcessType = aRezervacePuvod->ProcessType;
+            if (output[3].data)
+                *Rezervovano = *(UA_Boolean *)output[3].data;
+            if (aRezervaceNova != NULL && output[0].data && output[1].data && output[2].data)
+            {
+                aRezervaceNova->IDofCell = aRezervacePuvod->IDofCell;
+                aRezervaceNova->IDofReservation = *(UA_UInt16 *)output[0].data;
+                aRezervaceNova->Price = *(UA_Float *)output[1].data;
+                aRezervaceNova->TimeOfReservation = *(UA_DateTime *)output[2].data;
+                aRezervaceNova->ProcessType = aRezervacePuvod->ProcessType;
+            }
         }
-        UA_Array_delete(output, outputSize, &UA_TYPES[UA_TYPES_VARIANT]);
+        if (output)
+            UA_Array_delete(output, outputSize, &UA_TYPES[UA_TYPES_VARIANT]);
     }
     else
     {
@@ -425,9 +438,10 @@ uint8_t DoReservation_klient(CellInfo aCellInfo, Reservation *aRezervace, bool *
     UA_StatusCode retval = UA_Client_call(management_client, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), UA_NODEID_STRING(1, "DoProcess"), 1, &input, &outputSize, &output);
     if (retval == UA_STATUSCODE_GOOD)
     {
-        *Zahajeno = *(UA_Boolean *)output->data;
-        
-        UA_Array_delete(output, outputSize, &UA_TYPES[UA_TYPES_VARIANT]);
+        if (output && outputSize >= 1 && output[0].data)
+            *Zahajeno = *(UA_Boolean *)output[0].data;
+        if (output)
+            UA_Array_delete(output, outputSize, &UA_TYPES[UA_TYPES_VARIANT]);
     }
     else
     {
@@ -460,9 +474,10 @@ uint8_t IsFinished(CellInfo aCellInfo, Reservation *aRezervace, bool *finished)
     UA_StatusCode retval = UA_Client_call(management_client, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), UA_NODEID_STRING(1, "IsFinished"), 1, &input, &outputSize, &output);
     if (retval == UA_STATUSCODE_GOOD)
     {
-        *finished = *(UA_Boolean *)output->data;
-        
-        UA_Array_delete(output, outputSize, &UA_TYPES[UA_TYPES_VARIANT]);
+        if (output && outputSize >= 1 && output[0].data)
+            *finished = *(UA_Boolean *)output[0].data;
+        if (output)
+            UA_Array_delete(output, outputSize, &UA_TYPES[UA_TYPES_VARIANT]);
     }
     else
     {
@@ -495,8 +510,8 @@ uint8_t Occupancy(CellInfo aCellInfo, bool Okupovani)
     UA_StatusCode retval = UA_Client_call(management_client, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), UA_NODEID_STRING(1, "Occupancy"), 1, &input, &outputSize, &output);
     if (retval == UA_STATUSCODE_GOOD)
     {
-        
-        UA_Array_delete(output, outputSize, &UA_TYPES[UA_TYPES_VARIANT]);
+        if (output)
+            UA_Array_delete(output, outputSize, &UA_TYPES[UA_TYPES_VARIANT]);
     }
     else
     {
@@ -510,13 +525,57 @@ uint8_t Occupancy(CellInfo aCellInfo, bool Okupovani)
     return 0;
 }
 
-/* --- PLC AAS contract: correct namespace index (ns=4) per UAExpert --- */
+/* --- PLC AAS contract: namespace index (ns=4) for this firmware --- */
 /* CurrentId variable: ns=4;i=6101 */
 #define PLC_NODEID_CURRENTID_NS 4
 #define PLC_NODEID_CURRENTID_ID 6101
-/* ReportProduct method: ns=4;i=7004 */
-#define PLC_NODEID_REPORTPRODUCT_METHOD_NS 4
-#define PLC_NODEID_REPORTPRODUCT_METHOD_ID 7004
+/* AAS methods: ReportProduct, GetSupported, ReserveAction, FreeFromPosition */
+#define PLC_NODEID_METHOD_NS 4
+#define PLC_NODEID_REPORTPRODUCT_ID 7004
+#define PLC_NODEID_GETSUPPORTED_ID 7003
+#define PLC_NODEID_RESERVEACTION_ID 7005
+#define PLC_NODEID_FREEFROMPOSITION_ID 7000
+/* ActionStatus variable for optional completion polling: ns=4;i=6100 */
+#define PLC_NODEID_ACTIONSTATUS_NS 4
+#define PLC_NODEID_ACTIONSTATUS_ID 6100
+
+/* FNV-1a 32-bit hash for UID -> sr_id fallback when hex conversion yields 0 */
+static uint32_t fnv1a_hash_uid(const uint8_t *uid, uint8_t len)
+{
+    uint32_t h = 2166136261u;
+    for (uint8_t i = 0; i < len && i < 7; i++)
+        h = (h ^ (uint32_t)uid[i]) * 16777619u;
+    return h & 0x7FFFFFFFu;
+}
+
+/* Build decimal sr_id string from UID bytes. Ensures non-zero; uses FNV-1a fallback if needed. */
+bool OPC_BuildSrIdFromUid(const uint8_t *uid, uint8_t uidLen, char *outBuf, size_t outSize)
+{
+    if (!uid || !outBuf || outSize < 2)
+        return false;
+    /* Last up to 4 bytes as hex (8 chars), parse to uint32; if 0 use FNV-1a */
+    char hex[9] = { '0','0','0','0','0','0','0','0','\0' };
+    size_t n = (uidLen > 4) ? 4 : uidLen;
+    size_t off = 8 - (n * 2);
+    for (size_t i = 0; i < n; i++)
+    {
+        uint8_t byte = uid[uidLen - n + i];
+        int a = (byte >> 4) & 0x0F;
+        int b = byte & 0x0F;
+        hex[off + i*2]   = (char)(a < 10 ? '0' + a : 'A' + a - 10);
+        hex[off + i*2+1] = (char)(b < 10 ? '0' + b : 'A' + b - 10);
+    }
+    uint32_t v = (uint32_t)strtoul(hex, NULL, 16);
+    if (v == 0)
+        v = fnv1a_hash_uid(uid, uidLen);
+    if (v == 0)
+        v = 1;
+    int written = snprintf(outBuf, outSize, "%" PRIu32, v);
+    if (written < 0 || (size_t)written >= outSize)
+        return false;
+    ESP_LOGI(TAG, "OPC_BuildSrIdFromUid: UID len=%u -> sr_id=%s", (unsigned)uidLen, outBuf);
+    return true;
+}
 
 bool OPC_WriteCurrentId(const char *endpoint, const char *value)
 {
@@ -550,43 +609,35 @@ bool OPC_WriteCurrentId(const char *endpoint, const char *value)
     return true;
 }
 
-bool OPC_ReportProduct(const char *endpoint, const char *uidStr)
+/* PLC contract: ReportProduct expects ONLY a decimal integer string (sr_id). */
+bool OPC_ReportProduct(const char *endpoint, const char *sr_id_decimal)
 {
-    if (!endpoint || !uidStr)
+    if (!endpoint || !sr_id_decimal)
     {
         ESP_LOGE(TAG, "OPC_ReportProduct: invalid args");
         return false;
     }
-    size_t len = strlen(uidStr);
-    ESP_LOGI(TAG, "OPC_ReportProduct: uidStr=\"%.*s\" strlen(uidStr)=%u", (int)(len > 32 ? 32 : len), uidStr, (unsigned)len);
-
-    /* Derive last8 hex safely: len>=8 -> last 8 chars; else left-pad with '0' to 8 */
-    char last8_buf[9];
-    const char *last8;
-    if (len >= 8)
+    /* Validate digits only; PLC parses with STRING_TO_DINT, id must be != 0 */
+    for (const char *p = sr_id_decimal; *p; p++)
     {
-        last8 = uidStr + (len - 8);
+        if (!isdigit((unsigned char)*p))
+        {
+            ESP_LOGE(TAG, "OPC_ReportProduct: sr_id must be decimal digits only, got \"%s\"", sr_id_decimal);
+            return false;
+        }
     }
-    else
+    if (sr_id_decimal[0] == '0' && sr_id_decimal[1] == '\0')
     {
-        memset(last8_buf, '0', 8);
-        last8_buf[8] = '\0';
-        if (len > 0)
-            memcpy(last8_buf + (8 - len), uidStr, len);
-        last8 = last8_buf;
-    }
-
-    char *endptr;
-    uint32_t v = (uint32_t)strtoul(last8, &endptr, 16);
-    if (endptr == last8 || (endptr && *endptr != '\0'))
-    {
-        ESP_LOGE(TAG, "OPC_ReportProduct: parse error last8=\"%s\"", last8);
+        ESP_LOGE(TAG, "OPC_ReportProduct: sr_id must not be 0");
         return false;
     }
-    uint32_t id = v & 0x7FFFFFFF;
-    if (id == 0)
-        id = 1;
-    ESP_LOGI(TAG, "OPC_ReportProduct: last8=\"%s\" hex=0x%08" PRIx32 " id=%" PRIu32, last8, v, id);
+    size_t len = strlen(sr_id_decimal);
+    if (len >= 12)
+    {
+        ESP_LOGE(TAG, "OPC_ReportProduct: sr_id string too long");
+        return false;
+    }
+    ESP_LOGI(TAG, "OPC_ReportProduct: sr_id=\"%s\" (digits only)", sr_id_decimal);
 
     UA_Client *client = NULL;
     if (!ClientStart(&client, endpoint))
@@ -595,25 +646,14 @@ bool OPC_ReportProduct(const char *endpoint, const char *uidStr)
         return false;
     }
 
-    char inputMessage[12];  /* decimal string of id, no JSON */
-    int n = snprintf(inputMessage, sizeof(inputMessage), "%" PRIu32, id);
-    if (n < 0 || n >= (int)sizeof(inputMessage))
-    {
-        ESP_LOGE(TAG, "OPC_ReportProduct: input message too long");
-        UA_Client_disconnect(client);
-        UA_Client_delete(client);
-        return false;
-    }
-    ESP_LOGI(TAG, "OPC_ReportProduct: InputMessage=%s", inputMessage);
-    UA_String inputMsg = UA_String_fromChars(inputMessage);
+    UA_String inputMsg = UA_String_fromChars(sr_id_decimal);
     UA_Variant inputVar;
     UA_Variant_init(&inputVar);
     UA_Variant_setScalar(&inputVar, &inputMsg, &UA_TYPES[UA_TYPES_STRING]);
 
     UA_Variant *output = NULL;
     size_t outputSize = 0;
-    /* objectId = methodId (method node); if server returns BadMethodInvalid, use parent object node id */
-    UA_NodeId methodId = UA_NODEID_NUMERIC(PLC_NODEID_REPORTPRODUCT_METHOD_NS, PLC_NODEID_REPORTPRODUCT_METHOD_ID);
+    UA_NodeId methodId = UA_NODEID_NUMERIC(PLC_NODEID_METHOD_NS, PLC_NODEID_REPORTPRODUCT_ID);
     UA_StatusCode ret = UA_Client_call(client, methodId, methodId, 1, &inputVar, &outputSize, &output);
     UA_String_deleteMembers(&inputMsg);
 
@@ -642,4 +682,81 @@ bool OPC_ReportProduct(const char *endpoint, const char *uidStr)
     UA_Client_delete(client);
     ESP_LOGI(TAG, "OPC_ReportProduct: call OK");
     return true;
+}
+
+/* Generic AAS method call: InputMessage (STRING) -> OutputMessage (STRING). Returns true on UA success. */
+static bool OPC_CallAasMethod(const char *endpoint, uint32_t methodNodeId, const char *inputMessage,
+                              char *outBuf, size_t outSize)
+{
+    if (!endpoint || !inputMessage)
+        return false;
+    UA_Client *client = NULL;
+    if (!ClientStart(&client, endpoint))
+    {
+        ESP_LOGE(TAG, "OPC_CallAasMethod(ns=%u;i=%" PRIu32 "): connect failed", (unsigned)PLC_NODEID_METHOD_NS, (uint32_t)methodNodeId);
+        return false;
+    }
+    UA_String inputStr = UA_String_fromChars(inputMessage);
+    UA_Variant inputVar;
+    UA_Variant_init(&inputVar);
+    UA_Variant_setScalar(&inputVar, &inputStr, &UA_TYPES[UA_TYPES_STRING]);
+
+    UA_Variant *output = NULL;
+    size_t outputSize = 0;
+    UA_NodeId methodId = UA_NODEID_NUMERIC(PLC_NODEID_METHOD_NS, methodNodeId);
+    UA_StatusCode ret = UA_Client_call(client, methodId, methodId, 1, &inputVar, &outputSize, &output);
+    UA_String_deleteMembers(&inputStr);
+
+    if (outBuf && outSize > 0)
+        outBuf[0] = '\0';
+    if (ret == UA_STATUSCODE_GOOD && outputSize > 0 && output && output[0].data && output[0].type == &UA_TYPES[UA_TYPES_STRING])
+    {
+        UA_String *outStr = (UA_String *)output[0].data;
+        if (outStr->length > 0 && outStr->data && outBuf && outSize > 0)
+        {
+            size_t copyLen = outStr->length < outSize - 1 ? outStr->length : outSize - 1;
+            memcpy(outBuf, outStr->data, copyLen);
+            outBuf[copyLen] = '\0';
+        }
+    }
+    if (output)
+        UA_Array_delete(output, outputSize, &UA_TYPES[UA_TYPES_VARIANT]);
+    UA_Client_disconnect(client);
+    UA_Client_delete(client);
+    if (ret != UA_STATUSCODE_GOOD)
+    {
+        ESP_LOGE(TAG, "OPC_CallAasMethod(ns=%u;i=%" PRIu32 "): call failed 0x%08" PRIx32, (unsigned)PLC_NODEID_METHOD_NS, (uint32_t)methodNodeId, (uint32_t)ret);
+        return false;
+    }
+    if (outBuf && outBuf[0])
+        ESP_LOGI(TAG, "OPC_CallAasMethod(ns=%u;i=%" PRIu32 "): OutputMessage=%s", (unsigned)PLC_NODEID_METHOD_NS, (uint32_t)methodNodeId, outBuf);
+    return true;
+}
+
+/* GetSupported(InputMessage) with 5-field format: "sr_id/priority/material/parameterA/parameterB". Returns "Support:..." or "Error:XXXX". */
+bool OPC_GetSupported(const char *endpoint, const char *inputMessage_5field, char *outBuf, size_t outSize)
+{
+    ESP_LOGI(TAG, "OPC_GetSupported: InputMessage=%s", inputMessage_5field ? inputMessage_5field : "(null)");
+    return OPC_CallAasMethod(endpoint, PLC_NODEID_GETSUPPORTED_ID, inputMessage_5field, outBuf, outSize);
+}
+
+/* ReserveAction(InputMessage) with 5-field format. Returns "Success" or "Error:XXXX". */
+bool OPC_ReserveAction(const char *endpoint, const char *inputMessage_5field, char *outBuf, size_t outSize)
+{
+    ESP_LOGI(TAG, "OPC_ReserveAction: InputMessage=%s", inputMessage_5field ? inputMessage_5field : "(null)");
+    return OPC_CallAasMethod(endpoint, PLC_NODEID_RESERVEACTION_ID, inputMessage_5field, outBuf, outSize);
+}
+
+/* FreeFromPosition(InputMessage) with "sr_id" only. Returns "Success" or "Error:XXXX". */
+bool OPC_FreeFromPosition(const char *endpoint, const char *sr_id_decimal, char *outBuf, size_t outSize)
+{
+    ESP_LOGI(TAG, "OPC_FreeFromPosition: sr_id=%s", sr_id_decimal ? sr_id_decimal : "(null)");
+    return OPC_CallAasMethod(endpoint, PLC_NODEID_FREEFROMPOSITION_ID, sr_id_decimal, outBuf, outSize);
+}
+
+/* Wait for step completion: no PLC code change — use timeout. Optionally poll ActionStatus if needed later. */
+void OPC_AAS_WaitCompletion(uint32_t timeout_ms)
+{
+    ESP_LOGI(TAG, "OPC_AAS_WaitCompletion: waiting %" PRIu32 " ms (timeout-based)", (uint32_t)timeout_ms);
+    vTaskDelay(timeout_ms / portTICK_PERIOD_MS);
 }

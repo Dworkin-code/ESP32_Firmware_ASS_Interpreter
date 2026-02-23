@@ -62,9 +62,19 @@ uint8_t IsFinished(CellInfo aCellInfo, Reservation *aRezervace, bool *finished);
 uint8_t Occupancy(CellInfo aCellInfo, bool Okupovani);     
 uint64_t GetTime();
 
-/* PLC AAS contract (Iteration 1): CurrentId variable + ReportProduct method */
+/* PLC AAS contract: CurrentId variable + AAS methods (ReportProduct, GetSupported, ReserveAction, FreeFromPosition) */
 bool OPC_WriteCurrentId(const char *endpoint, const char *value);
-bool OPC_ReportProduct(const char *endpoint, const char *currentIdString);
+/* ReportProduct: InputMessage = sr_id (decimal digits only, must not be 0) */
+bool OPC_ReportProduct(const char *endpoint, const char *sr_id_decimal);
+/* Build sr_id decimal string from UID bytes; ensures non-zero (FNV-1a fallback if needed) */
+bool OPC_BuildSrIdFromUid(const uint8_t *uid, uint8_t uidLen, char *outBuf, size_t outSize);
+/* GetSupported / ReserveAction: InputMessage = "sr_id/priority/material/parameterA/parameterB" (5 fields). outBuf receives OutputMessage. */
+bool OPC_GetSupported(const char *endpoint, const char *inputMessage_5field, char *outBuf, size_t outSize);
+bool OPC_ReserveAction(const char *endpoint, const char *inputMessage_5field, char *outBuf, size_t outSize);
+/* FreeFromPosition: InputMessage = "sr_id" (decimal only) */
+bool OPC_FreeFromPosition(const char *endpoint, const char *sr_id_decimal, char *outBuf, size_t outSize);
+/* Wait for AAS step completion (timeout-based; no PLC change). */
+void OPC_AAS_WaitCompletion(uint32_t timeout_ms);
 
 #ifdef __cplusplus
 }
