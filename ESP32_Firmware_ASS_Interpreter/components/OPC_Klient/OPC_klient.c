@@ -1,5 +1,7 @@
 #include "OPC_klient.h"
 #include "NFC_recipes.h"
+#include <inttypes.h>
+#include <stdlib.h>
 
 //#define OPC_KLIENT_ALL_DEBUG_EN 1
 //#define OPC_KLIENT_DEBUG_EN 1
@@ -305,7 +307,7 @@ uint8_t Inquire(CellInfo aCellInfo, uint16_t IDInterpreter, uint8_t TypeOfProces
     UA_Variant *output;
     size_t outputSize;
     OPC_KLIENT_ALL_DEBUG(TAG, "Volam sitovou metodu\n");
-    UA_StatusCode retval = UA_Client_call(management_client, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), UA_NODEID_STRING(1, "Inquire"), 5, &input, &outputSize, &output);
+    UA_StatusCode retval = UA_Client_call(management_client, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), UA_NODEID_STRING(1, "Inquire"), 5, input, &outputSize, &output);
     if (retval == UA_STATUSCODE_GOOD)
     {
         aRezervace->IDofReservation = *(UA_UInt16 *)output[0].data;
@@ -508,12 +510,12 @@ uint8_t Occupancy(CellInfo aCellInfo, bool Okupovani)
     return 0;
 }
 
-/* --- PLC AAS contract (source: informace/PLC_final_aas_extraction.json) --- */
-/* CurrentId variable: ns=1;i=6101 (PLCServiceProvider/Variables/Dynamic/CurrentId), String RW */
-#define PLC_NODEID_CURRENTID_NS 1
+/* --- PLC AAS contract: correct namespace index (ns=4) per UAExpert --- */
+/* CurrentId variable: ns=4;i=6101 */
+#define PLC_NODEID_CURRENTID_NS 4
 #define PLC_NODEID_CURRENTID_ID 6101
-/* ReportProduct method: ns=1;i=7004 */
-#define PLC_NODEID_REPORTPRODUCT_METHOD_NS 1
+/* ReportProduct method: ns=4;i=7004 */
+#define PLC_NODEID_REPORTPRODUCT_METHOD_NS 4
 #define PLC_NODEID_REPORTPRODUCT_METHOD_ID 7004
 
 bool OPC_WriteCurrentId(const char *endpoint, const char *value)
@@ -541,39 +543,69 @@ bool OPC_WriteCurrentId(const char *endpoint, const char *value)
     UA_Client_delete(client);
     if (ret != UA_STATUSCODE_GOOD)
     {
-        ESP_LOGE(TAG, "OPC_WriteCurrentId: write failed 0x%08x", ret);
+        ESP_LOGE(TAG, "OPC_WriteCurrentId: write failed 0x%08" PRIx32, (uint32_t)ret);
         return false;
     }
     ESP_LOGI(TAG, "OPC_WriteCurrentId: write OK");
     return true;
 }
 
-bool OPC_ReportProduct(const char *endpoint, const char *currentIdString)
+bool OPC_ReportProduct(const char *endpoint, const char *uidStr)
 {
-    if (!endpoint || !currentIdString)
+    if (!endpoint || !uidStr)
     {
         ESP_LOGE(TAG, "OPC_ReportProduct: invalid args");
         return false;
     }
+    size_t len = strlen(uidStr);
+    ESP_LOGI(TAG, "OPC_ReportProduct: uidStr=\"%.*s\" strlen(uidStr)=%u", (int)(len > 32 ? 32 : len), uidStr, (unsigned)len);
+
+    /* Derive last8 hex safely: len>=8 -> last 8 chars; else left-pad with '0' to 8 */
+    char last8_buf[9];
+    const char *last8;
+    if (len >= 8)
+    {
+        last8 = uidStr + (len - 8);
+    }
+    else
+    {
+        memset(last8_buf, '0', 8);
+        last8_buf[8] = '\0';
+        if (len > 0)
+            memcpy(last8_buf + (8 - len), uidStr, len);
+        last8 = last8_buf;
+    }
+
+    char *endptr;
+    uint32_t v = (uint32_t)strtoul(last8, &endptr, 16);
+    if (endptr == last8 || (endptr && *endptr != '\0'))
+    {
+        ESP_LOGE(TAG, "OPC_ReportProduct: parse error last8=\"%s\"", last8);
+        return false;
+    }
+    uint32_t id = v & 0x7FFFFFFF;
+    if (id == 0)
+        id = 1;
+    ESP_LOGI(TAG, "OPC_ReportProduct: last8=\"%s\" hex=0x%08" PRIx32 " id=%" PRIu32, last8, v, id);
+
     UA_Client *client = NULL;
     if (!ClientStart(&client, endpoint))
     {
         ESP_LOGE(TAG, "OPC_ReportProduct: connect failed");
         return false;
     }
-    /* InputMessage: JSON per PLC contract */
-    char inputJson[256];
-    int n = snprintf(inputJson, sizeof(inputJson),
-                    "{\"reqId\":\"esp-%lu\",\"type\":\"ReportProduct\",\"product\":{\"currentId\":\"%s\",\"id\":\"\",\"name\":\"\",\"submodel\":\"ProductProfileV1\"}}",
-                    (unsigned long)xTaskGetTickCount(), currentIdString);
-    if (n < 0 || n >= (int)sizeof(inputJson))
+
+    char inputMessage[12];  /* decimal string of id, no JSON */
+    int n = snprintf(inputMessage, sizeof(inputMessage), "%" PRIu32, id);
+    if (n < 0 || n >= (int)sizeof(inputMessage))
     {
-        ESP_LOGE(TAG, "OPC_ReportProduct: input JSON too long");
+        ESP_LOGE(TAG, "OPC_ReportProduct: input message too long");
         UA_Client_disconnect(client);
         UA_Client_delete(client);
         return false;
     }
-    UA_String inputMsg = UA_String_fromChars(inputJson);
+    ESP_LOGI(TAG, "OPC_ReportProduct: InputMessage=%s", inputMessage);
+    UA_String inputMsg = UA_String_fromChars(inputMessage);
     UA_Variant inputVar;
     UA_Variant_init(&inputVar);
     UA_Variant_setScalar(&inputVar, &inputMsg, &UA_TYPES[UA_TYPES_STRING]);
@@ -587,7 +619,7 @@ bool OPC_ReportProduct(const char *endpoint, const char *currentIdString)
 
     if (ret != UA_STATUSCODE_GOOD)
     {
-        ESP_LOGE(TAG, "OPC_ReportProduct: call failed 0x%08x", ret);
+        ESP_LOGE(TAG, "OPC_ReportProduct: call failed 0x%08" PRIx32, (uint32_t)ret);
         UA_Client_disconnect(client);
         UA_Client_delete(client);
         return false;
