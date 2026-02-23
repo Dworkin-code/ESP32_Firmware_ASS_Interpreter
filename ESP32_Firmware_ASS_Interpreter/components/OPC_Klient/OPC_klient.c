@@ -507,3 +507,107 @@ uint8_t Occupancy(CellInfo aCellInfo, bool Okupovani)
 
     return 0;
 }
+
+/* --- PLC AAS contract (source: informace/PLC_final_aas_extraction.json) --- */
+/* CurrentId variable: ns=1;i=6101 (PLCServiceProvider/Variables/Dynamic/CurrentId), String RW */
+#define PLC_NODEID_CURRENTID_NS 1
+#define PLC_NODEID_CURRENTID_ID 6101
+/* ReportProduct method: ns=1;i=7004 */
+#define PLC_NODEID_REPORTPRODUCT_METHOD_NS 1
+#define PLC_NODEID_REPORTPRODUCT_METHOD_ID 7004
+
+bool OPC_WriteCurrentId(const char *endpoint, const char *value)
+{
+    if (!endpoint || !value)
+    {
+        ESP_LOGE(TAG, "OPC_WriteCurrentId: invalid args");
+        return false;
+    }
+    UA_Client *client = NULL;
+    if (!ClientStart(&client, endpoint))
+    {
+        ESP_LOGE(TAG, "OPC_WriteCurrentId: connect failed");
+        return false;
+    }
+    UA_String uaStr = UA_String_fromChars(value);
+    UA_Variant variant;
+    UA_Variant_init(&variant);
+    UA_Variant_setScalar(&variant, &uaStr, &UA_TYPES[UA_TYPES_STRING]);
+    UA_StatusCode ret = UA_Client_writeValueAttribute(client,
+                                                       UA_NODEID_NUMERIC(PLC_NODEID_CURRENTID_NS, PLC_NODEID_CURRENTID_ID),
+                                                       &variant);
+    UA_String_deleteMembers(&uaStr);
+    UA_Client_disconnect(client);
+    UA_Client_delete(client);
+    if (ret != UA_STATUSCODE_GOOD)
+    {
+        ESP_LOGE(TAG, "OPC_WriteCurrentId: write failed 0x%08x", ret);
+        return false;
+    }
+    ESP_LOGI(TAG, "OPC_WriteCurrentId: write OK");
+    return true;
+}
+
+bool OPC_ReportProduct(const char *endpoint, const char *currentIdString)
+{
+    if (!endpoint || !currentIdString)
+    {
+        ESP_LOGE(TAG, "OPC_ReportProduct: invalid args");
+        return false;
+    }
+    UA_Client *client = NULL;
+    if (!ClientStart(&client, endpoint))
+    {
+        ESP_LOGE(TAG, "OPC_ReportProduct: connect failed");
+        return false;
+    }
+    /* InputMessage: JSON per PLC contract */
+    char inputJson[256];
+    int n = snprintf(inputJson, sizeof(inputJson),
+                    "{\"reqId\":\"esp-%lu\",\"type\":\"ReportProduct\",\"product\":{\"currentId\":\"%s\",\"id\":\"\",\"name\":\"\",\"submodel\":\"ProductProfileV1\"}}",
+                    (unsigned long)xTaskGetTickCount(), currentIdString);
+    if (n < 0 || n >= (int)sizeof(inputJson))
+    {
+        ESP_LOGE(TAG, "OPC_ReportProduct: input JSON too long");
+        UA_Client_disconnect(client);
+        UA_Client_delete(client);
+        return false;
+    }
+    UA_String inputMsg = UA_String_fromChars(inputJson);
+    UA_Variant inputVar;
+    UA_Variant_init(&inputVar);
+    UA_Variant_setScalar(&inputVar, &inputMsg, &UA_TYPES[UA_TYPES_STRING]);
+
+    UA_Variant *output = NULL;
+    size_t outputSize = 0;
+    /* objectId = methodId (method node); if server returns BadMethodInvalid, use parent object node id */
+    UA_NodeId methodId = UA_NODEID_NUMERIC(PLC_NODEID_REPORTPRODUCT_METHOD_NS, PLC_NODEID_REPORTPRODUCT_METHOD_ID);
+    UA_StatusCode ret = UA_Client_call(client, methodId, methodId, 1, &inputVar, &outputSize, &output);
+    UA_String_deleteMembers(&inputMsg);
+
+    if (ret != UA_STATUSCODE_GOOD)
+    {
+        ESP_LOGE(TAG, "OPC_ReportProduct: call failed 0x%08x", ret);
+        UA_Client_disconnect(client);
+        UA_Client_delete(client);
+        return false;
+    }
+    if (outputSize > 0 && output && output[0].data && output[0].type == &UA_TYPES[UA_TYPES_STRING])
+    {
+        UA_String *outStr = (UA_String *)output[0].data;
+        if (outStr->length > 0 && outStr->data)
+        {
+            char buf[384];
+            size_t copyLen = outStr->length < sizeof(buf) - 1 ? outStr->length : sizeof(buf) - 1;
+            memcpy(buf, outStr->data, copyLen);
+            buf[copyLen] = '\0';
+            ESP_LOGI(TAG, "OPC_ReportProduct: OutputMessage=%s", buf);
+        }
+    }
+    if (output)
+        UA_Array_delete(output, outputSize, &UA_TYPES[UA_TYPES_VARIANT]);
+    UA_Client_disconnect(client);
+    UA_Client_delete(client);
+    ESP_LOGI(TAG, "OPC_ReportProduct: call OK");
+    return true;
+}

@@ -60,7 +60,12 @@ uint8_t Reserve(CellInfo aCellInfo, Reservation *aRezervacePuvod, bool *Rezervov
 uint8_t DoReservation_klient(CellInfo aCellInfo, Reservation *aRezervace, bool *Zahajeno);
 uint8_t IsFinished(CellInfo aCellInfo, Reservation *aRezervace, bool *finished);
 uint8_t Occupancy(CellInfo aCellInfo, bool Okupovani);     
-uint64_t GetTime();                                                                    
+uint64_t GetTime();
+
+/* PLC AAS contract (Iteration 1): CurrentId variable + ReportProduct method */
+bool OPC_WriteCurrentId(const char *endpoint, const char *value);
+bool OPC_ReportProduct(const char *endpoint, const char *currentIdString);
+
 #ifdef __cplusplus
 }
 #endif

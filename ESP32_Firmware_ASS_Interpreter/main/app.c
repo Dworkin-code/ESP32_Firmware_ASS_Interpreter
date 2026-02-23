@@ -159,6 +159,21 @@ void State_Machine(void *pvParameter)
       }
       NFC_Print(iHandlerData.sWorkingCardInfo);
       NFC_STATE_DEBUG(GetRafName(RAF), "Data se nacetla\n");
+      /* PLC AAS: on NFC tag with UID, write CurrentId and call ReportProduct */
+      if (iHandlerData.sWorkingCardInfo.sUidLength > 0)
+      {
+        char uidStr[15];
+        size_t i;
+        for (i = 0; i < (size_t)iHandlerData.sWorkingCardInfo.sUidLength && i < 7; i++)
+          sprintf(uidStr + 2 * i, "%02X", iHandlerData.sWorkingCardInfo.sUid[i]);
+        uidStr[2 * i] = '\0';
+        if (xSemaphoreTake(Parametry->xEthernet, (TickType_t)5000) == pdTRUE)
+        {
+          OPC_WriteCurrentId(MyCellInfo.IPAdress, uidStr);
+          OPC_ReportProduct(MyCellInfo.IPAdress, uidStr);
+          xSemaphoreGive(Parametry->xEthernet);
+        }
+      }
       if (iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep >= iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeSteps)
       {
         NFC_STATE_DEBUG(GetRafName(RAF), "Recept je rozbity,(Pocet receptu: %d a aktualni recept: %d\n", iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeSteps, iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep);
