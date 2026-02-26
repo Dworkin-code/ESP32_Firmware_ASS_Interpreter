@@ -1,0 +1,55 @@
+﻿FUNCTION "PQueue_find" : Void
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT 
+      id : DInt;   // Id for action 'find'.
+   END_VAR
+
+   VAR_OUTPUT 
+      error : Bool;   // FALSE: No error  TRUE: An error occurred during the execution of the FB.
+      status : Word;   // 16#0000-16#7FFF: Status of the FB  16#8000-16#FFFF: Error identification (see following Table).
+      found : Bool;   // TRUE: item was found; FALSE: item was not found.
+      productPosition : DInt;   // Position of found item; '0' if not found.
+   END_VAR
+
+   VAR_IN_OUT 
+      PQueueData : "typePQueueData";   // Priority Queue data.
+   END_VAR
+
+   VAR_TEMP 
+      i : Int;   // Variable for 'for cycle'.
+   END_VAR
+
+
+BEGIN
+	
+	REGION find
+	    #productPosition := -1;
+	    #found := FALSE;
+	    #status := "PQNoError";
+	    FOR #i := 0 TO "QueueCountSmall" DO
+	        "Queue_find"(id := #id,
+	                     error => #error,
+	                     status => #status,
+	                     found => #found,
+	                     productPosition => #productPosition,
+	                     QueueData := #PQueueData.buffer[#i]);
+	        IF #found THEN
+	            EXIT;
+	        END_IF;
+	    END_FOR;
+	    
+	    IF #status = "PQNoError" THEN
+	        IF #found THEN
+	            #error := FALSE;
+	            #status := "PQNoError";
+	        ELSE
+	            #productPosition := 0;
+	            #error := FALSE;
+	            #status := "PQErrItemNotFound";
+	        END_IF;
+	    END_IF;
+	END_REGION find
+	
+END_FUNCTION
+

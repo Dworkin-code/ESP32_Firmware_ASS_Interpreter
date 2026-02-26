@@ -66,6 +66,8 @@ uint64_t GetTime();
 bool OPC_WriteCurrentId(const char *endpoint, const char *value);
 /* ReportProduct: InputMessage = sr_id (decimal digits only, must not be 0) */
 bool OPC_ReportProduct(const char *endpoint, const char *sr_id_decimal);
+/* ReportProductEx: same as ReportProduct but returns OutputMessage in outBuf (e.g. "Success", "Error:8501"). Logs sr_id digits only. */
+bool OPC_ReportProductEx(const char *endpoint, const char *sr_id_decimal, char *outBuf, size_t outSize);
 /* Build sr_id decimal string from UID bytes; ensures non-zero (FNV-1a fallback if needed) */
 bool OPC_BuildSrIdFromUid(const uint8_t *uid, uint8_t uidLen, char *outBuf, size_t outSize);
 /* GetSupported / ReserveAction: InputMessage = "sr_id/priority/material/parameterA/parameterB" (5 fields). outBuf receives OutputMessage. */

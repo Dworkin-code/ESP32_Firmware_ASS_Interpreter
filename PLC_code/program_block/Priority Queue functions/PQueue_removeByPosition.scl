@@ -1,0 +1,61 @@
+﻿FUNCTION "PQueue_removeByPosition" : Void
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT 
+      position : DInt;   // Position for action 'remove'.
+   END_VAR
+
+   VAR_OUTPUT 
+      error : Bool;   // FALSE: No error  TRUE: An error occurred during the execution of the FB.
+      status : Word;   // 16#0000-16#7FFF: Status of the FB  16#8000-16#FFFF: Error identification (see following Table).
+      subFunctionStatus : Word;   // Status or return value of called FB's, FC's and system blocks.
+   END_VAR
+
+   VAR_IN_OUT 
+      PQueueData : "typePQueueData";   // Priority Queue data.
+   END_VAR
+
+   VAR_TEMP 
+      i : Int;   // Variable for 'for cycle'.
+      tempTableIndex : Int;   // Temporary index of specific table.
+      tempPosition : DInt;   // Temporary position.
+   END_VAR
+
+
+BEGIN
+	
+	REGION removeByPosition
+	    #tempTableIndex := 0;
+	    #tempPosition := 0;
+	    FOR #i := 0 TO "QueueCountSmall" DO
+	        #tempPosition := #tempPosition + #PQueueData.subElementCount[#i];
+	        IF #tempPosition > #position THEN
+	            #tempPosition := #tempPosition - #PQueueData.subElementCount[#i];
+	            #tempTableIndex := #i;
+	            EXIT;
+	        END_IF;
+	    END_FOR;
+	    
+	    "Queue_remove"(position := DINT_TO_INT(#position - #tempPosition),
+	                   initialItem := #PQueueData.emptyItem,
+	                   error => #error,
+	                   status => #status,
+	                   subFunctionStatus => #subFunctionStatus,
+	                   QueueData := #PQueueData.buffer[#tempTableIndex]);
+	    IF #error = FALSE THEN
+	        #PQueueData.subElementCount[#i] := #PQueueData.subElementCount[#i] - 1;
+	    END_IF;
+	    
+	    #PQueueData.isFullBuffer[#tempTableIndex] := #PQueueData.buffer[#tempTableIndex].staticQueueVariables.statElementCount = "SubQueueCount";
+	    #PQueueData.isEmptyBuffer[#tempTableIndex] := #PQueueData.buffer[#tempTableIndex].staticQueueVariables.statElementCount = 0;
+	    
+	END_REGION removeByPosition
+	
+	REGION countAllProductsInQueue
+	    #PQueueData.queueProductCount := 0;
+	    FOR #i := 0 TO "QueueCountSmall" DO
+	        #PQueueData.queueProductCount := #PQueueData.queueProductCount + #PQueueData.subElementCount[#i];
+	    END_FOR;
+	END_REGION
+END_FUNCTION
+

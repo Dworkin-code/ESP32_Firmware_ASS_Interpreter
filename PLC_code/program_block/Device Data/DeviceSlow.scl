@@ -1,0 +1,101 @@
+﻿FUNCTION_BLOCK "DeviceSlow"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT 
+      item : "typeProductInQueue";   // Item.
+      itemPositionP : DInt;   // Item's position in priority queue.
+   END_VAR
+
+   VAR_OUTPUT 
+      deviceRunning : Bool;   // Variable informing whether Device finished it's run.
+   END_VAR
+
+   VAR_IN_OUT 
+      OutputPositionSr : WString;   // Id of SR in output position.
+      Valid : Bool;   // Variable validating data to Device.
+      priorityQueue : "typePQueueData";   // Priority Queue of products registered in this SP.
+      actionStatus : WString;   // Status of a SP's service.
+   END_VAR
+
+   VAR 
+      waitTime : Int;   // Time needed for device to finish it's actions.
+      IEC_Timer_0_Instance {InstructionName := 'TON_TIME'; LibVersion := '1.0'; ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : TON_TIME;   // Timer for device.
+      doAction { S7_SetPoint := 'True'} : Bool;   // Block can be executed, since item was found.
+      finishedAction : Bool;   // Product is finished.
+   END_VAR
+
+   VAR_TEMP 
+      tempFailed : Bool;   // Product is not supported.
+   END_VAR
+
+
+BEGIN
+	#IEC_Timer_0_Instance(IN := #doAction AND #OutputPositionSr = WSTRING#'0',
+	                      PT := INT_TO_TIME(#waitTime),
+	                      Q => #finishedAction);
+	
+	IF #Valid = TRUE THEN
+	    #waitTime := "InitialWaitTime";
+	    #deviceRunning := TRUE;
+	    IF #actionStatus = WSTRING#'idle' THEN
+	        #doAction := TRUE;
+	    END_IF;
+	    
+	    REGION CHECK_ITEM
+	        CASE #item.material OF   //check material
+	            "SupportMaterialLow100".."SupportMaterialHigh100":
+	                #waitTime := #waitTime;
+	            "SupportMaterialLow60".."SupportMaterialHigh60":
+	                #waitTime := #waitTime + "DelayedWaitTime";
+	            ELSE
+	                #waitTime := 0;
+	        END_CASE;
+	        
+	        CASE #item."initialPosition/operation" OF   //check supportA
+	            "SupportALow100".."SupportAHigh100":
+	                #waitTime := #waitTime;
+	            "SupportALow60".."SupportAHigh60":
+	                #waitTime := #waitTime + "DelayedWaitTime";
+	            ELSE
+	                #waitTime := 0;
+	        END_CASE;
+	        
+	        CASE #item."finalPosition/operationParameter" OF   //check supportB
+	            "SupportBLow100".."SupportBHigh100":
+	                #waitTime := #waitTime;
+	            "SupportBLow60".."SupportBHigh60":
+	                #waitTime := #waitTime + "DelayedWaitTime";
+	            ELSE
+	                #waitTime := 0;
+	        END_CASE;
+	        
+	        IF #waitTime = 0 THEN
+	            #tempFailed := TRUE;
+	            #deviceRunning := FALSE;
+	        ELSE
+	            #tempFailed := FALSE;
+	        END_IF;
+	    END_REGION CHECK_ITEM
+	    
+	    REGION UPDATE_ACTION_STATUS
+	        IF #doAction THEN
+	            IF #tempFailed = TRUE THEN
+	                #actionStatus := WSTRING#'failed';
+	            ELSE
+	                #actionStatus := WSTRING#'inProgress';
+	            END_IF;
+	        END_IF;
+	    END_REGION UPDATE_ACTION_STATUS
+	    
+	    IF #finishedAction THEN
+	        #actionStatus := WSTRING#'idle';
+	        #deviceRunning := FALSE;
+	        #doAction := FALSE;
+	        #Valid := FALSE;
+	        #OutputPositionSr := DELETE(IN := DINT_TO_WSTRING(#item.id), L := 1, P := 1);
+	    END_IF;
+	    
+	END_IF;
+	
+END_FUNCTION_BLOCK
+

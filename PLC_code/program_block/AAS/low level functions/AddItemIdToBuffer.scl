@@ -1,0 +1,31 @@
+﻿FUNCTION "AddItemIdToBuffer" : Void
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT 
+      itemId : DInt;   // Id of a product.
+   END_VAR
+
+   VAR_IN_OUT 
+      historyBuffer : WString;   // Last finished products.
+   END_VAR
+
+   VAR_TEMP 
+      firstSlashIndex : Int;   // Temporary variable for storing position of first slash index.
+      newItem : WString;   // Temporary variable for storing item.
+   END_VAR
+
+
+BEGIN
+	// Find the position of the first '/' character
+	#firstSlashIndex := FIND(IN1:=#historyBuffer, IN2:= WSTRING#'/');
+	
+	
+	// If a '/' character is found, remove everything before it
+	IF #firstSlashIndex > 0 THEN
+	    #historyBuffer := DELETE(IN := #historyBuffer, L := #firstSlashIndex, P := 1);
+	    
+	END_IF;
+	
+	#historyBuffer := CONCAT(IN1 := #historyBuffer, IN2 := WSTRING#'/', IN3 := DELETE(IN := DINT_TO_WSTRING(#itemId), L := 1, P := 1));
+END_FUNCTION
+

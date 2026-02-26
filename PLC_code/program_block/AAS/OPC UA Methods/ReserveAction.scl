@@ -1,0 +1,139 @@
+﻿FUNCTION_BLOCK "ReserveAction"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR 
+      OPC_UA_ServerMethodPre_Instance {InstructionName := 'OPC_UA_ServerMethodPre'; LibVersion := '1.0'} : OPC_UA_ServerMethodPre;
+      OPC_UA_ServerMethodPost_Instance {InstructionName := 'OPC_UA_ServerMethodPost'; LibVersion := '1.0'} : OPC_UA_ServerMethodPost;
+      statUAM_Status_Pre : "typeOPCUAStatus";   // UDT for OPC UA status at the start of the method.
+      statUAM_Status_Post : "typeOPCUAStatus";   // UDT for OPC UA status at the end of the method.
+      UAMethod_InParameters : Struct   // Input parameters for OPC UA method.
+         InputMessage : WString;
+      END_STRUCT;
+      UAMethod_OutParameters : Struct   // Output parameters for OPC UA method.
+         OutputMessage : WString;
+      END_STRUCT;
+   END_VAR
+
+   VAR_TEMP 
+      tempUAM_MethodHandling : "typeOPCUAMethodhandling";   // UDT for handling OPC UA methods.
+      InputArray : "typeArrayMessage";   // UDT for input message.
+      tempItem : "typeProductInQueue";   // Temporary variable for storing item.
+      tempPosition : DInt;   // Position of item in PQueue.
+      tempError : Bool;   // FALSE: No error  TRUE: An error occurred during the execution of the FB.
+      tempStatus : DInt;   // 16#0000-16#7FFF: Status of the FB  16#8000-16#FFFF: Error identification (see following Table).
+      tempSubStatus : DInt;   // Status or return value of called FB's, FC's and system blocks.
+      tempFound : Bool;   // Item was found in PQueue.
+      tempErrValue : Word;   // Error code of HTA function.
+      tempHexSubStatus : WString;   // Temporary variable to store SubStatus in HEX.
+      tmpSupportValue : Int;   // Temporary variable for storing supporting value of a product.
+   END_VAR
+
+
+BEGIN
+	REGION ServerMethodPre
+	    #OPC_UA_ServerMethodPre_Instance(Done => #statUAM_Status_Pre.done,
+	                                     Busy => #statUAM_Status_Pre.busy,
+	                                     Error => #statUAM_Status_Pre.error,
+	                                     Status => #statUAM_Status_Pre.status,
+	                                     UAMethod_Called => #tempUAM_MethodHandling.UAMethod_Called,
+	                                     UAMethod_InParameters := #UAMethod_InParameters);
+	END_REGION ServerMethodPre
+	
+	REGION Method called
+	    IF #tempUAM_MethodHandling.UAMethod_Called THEN
+	        #InputArray := "GetMessage"(WSTRING_TO_STRING(#UAMethod_InParameters.InputMessage));
+	        #tempItem.id := STRING_TO_DINT(#InputArray.element[0]);
+	        IF #tempItem.id <> 0 THEN
+	            #tempItem.material := STRING_TO_INT(#InputArray.element[2]);
+	            #tempItem."initialPosition/operation" := STRING_TO_INT(#InputArray.element[3]);
+	            #tempItem."finalPosition/operationParameter" := STRING_TO_INT(#InputArray.element[4]);
+	            
+	            "PQueue_find"(id:=#tempItem.id,
+	                          error=>#tempError,
+	                          status=>#tempStatus,
+	                          found=>#tempFound,
+	                          productPosition=>#tempPosition,
+	                          PQueueData:="PQueue".PQueue);
+	        
+	            IF #tempFound THEN
+	                #tempError := TRUE;
+	                #tempStatus := "PQErrItemAlreadyInQueue";
+	            ELSE
+	                #tmpSupportValue := 100;
+	                CASE STRING_TO_INT(#InputArray.element[2]) OF   //check material
+	                    "SupportMaterialLow100".."SupportMaterialHigh100":
+	                        #tmpSupportValue := #tmpSupportValue;
+	                    "SupportMaterialLow60".."SupportMaterialHigh60":
+	                        #tmpSupportValue := #tmpSupportValue - 40;
+	                    ELSE
+	                        #tmpSupportValue := 0;
+	                END_CASE;
+	                
+	                CASE STRING_TO_INT(#InputArray.element[3]) OF   //check supportA
+	                    "SupportALow100".."SupportAHigh100":
+	                        #tmpSupportValue := #tmpSupportValue;
+	                    "SupportALow60".."SupportAHigh60":
+	                        #tmpSupportValue := #tmpSupportValue - 40;
+	                    ELSE
+	                        #tmpSupportValue := 0;
+	                END_CASE;
+	                
+	                CASE STRING_TO_INT(#InputArray.element[4]) OF   //check supportB
+	                    "SupportBLow100".."SupportBHigh100":
+	                        #tmpSupportValue := #tmpSupportValue;
+	                    "SupportBLow60".."SupportBHigh60":
+	                        #tmpSupportValue := #tmpSupportValue - 40;
+	                    ELSE
+	                        #tmpSupportValue := 0;
+	                END_CASE;
+	                IF #tmpSupportValue = 0 THEN
+	                    #tempError := TRUE;
+	                    #tempStatus := "ErrItemNotSupported";
+	                ELSE
+	                    "PQueue_push"(item := #tempItem,
+	                                  priority := STRING_TO_UINT(#InputArray.element[1]),
+	                                  error => #tempError,
+	                                  status => #tempStatus,
+	                                  subFunctionStatus => #tempSubStatus,
+	                                  PQueueData := "PQueue".PQueue);
+	                END_IF;
+	            END_IF;
+	        ELSE
+	            #tempError := TRUE;
+	            #tempStatus := "PQErrInvalidItemId";
+	            #tempSubStatus := "PQNoError";
+	        END_IF;
+	        
+	        IF #tempError THEN
+	            IF #tempSubStatus <> "PQNoError" THEN
+	                #tempErrValue := HTA(IN := #tempStatus, N := 4, OUT => #UAMethod_OutParameters."OutputMessage");
+	                #UAMethod_OutParameters."OutputMessage" := DELETE(IN := #UAMethod_OutParameters."OutputMessage", L := 4, P := 1);
+	                #UAMethod_OutParameters."OutputMessage" := CONCAT_WSTRING(IN1 := WSTRING#'Error1:', IN2 := #UAMethod_OutParameters."OutputMessage");
+	                #UAMethod_OutParameters."OutputMessage" := CONCAT_WSTRING(IN1 := #UAMethod_OutParameters."OutputMessage", IN2 := WSTRING#'_Error2:');
+	                #tempErrValue := HTA(IN := #tempStatus, N := 4, OUT => #tempHexSubStatus);
+	                #tempHexSubStatus := DELETE(IN := #tempHexSubStatus, L := 4, P := 1);
+	                #UAMethod_OutParameters."OutputMessage" := CONCAT_WSTRING(IN1 := #UAMethod_OutParameters."OutputMessage", IN2 := #tempHexSubStatus);
+	            ELSE
+	                #tempErrValue := HTA(IN := #tempStatus, N := 4, OUT => #UAMethod_OutParameters."OutputMessage");
+	                #UAMethod_OutParameters."OutputMessage" := DELETE(IN := #UAMethod_OutParameters."OutputMessage", L := 4, P := 1);
+	                #UAMethod_OutParameters."OutputMessage" := CONCAT_WSTRING(IN1 := WSTRING#'Error:', IN2 := #UAMethod_OutParameters."OutputMessage");
+	            END_IF;
+	        ELSE
+	            #UAMethod_OutParameters."OutputMessage" := WSTRING#'Success';
+	        END_IF;
+	        #tempUAM_MethodHandling.UAMethod_Result := "OpcUa_Good";
+	        #tempUAM_MethodHandling.UAMethod_Finished := TRUE;
+	    END_IF;
+	END_REGION Method called
+	
+	REGION ServerMethodPost
+	    #OPC_UA_ServerMethodPost_Instance(UAMethod_Result := #tempUAM_MethodHandling.UAMethod_Result,
+	                                      UAMethod_Finished := #tempUAM_MethodHandling.UAMethod_Finished,
+	                                      Done => #statUAM_Status_Post.done,
+	                                      Busy => #statUAM_Status_Post.busy,
+	                                      Error => #statUAM_Status_Post.error,
+	                                      Status => #statUAM_Status_Post.status,
+	                                      UAMethod_OutParameters := #UAMethod_OutParameters);
+	END_REGION ServerMethodPost
+END_FUNCTION_BLOCK
+

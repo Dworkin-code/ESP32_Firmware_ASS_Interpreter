@@ -47,6 +47,8 @@ typedef unsigned char byte;
 #endif
 /* AAS completion: wait time after ReserveAction returns Success (ms); no PLC status poll. */
 #define AAS_COMPLETION_TIMEOUT_MS 30000
+/* Re-scan guard: same sr_id within this window (ms) skips ReserveAction to avoid double call. */
+#define AAS_RESCAN_GUARD_MS 5000
 
 typedef struct
 {
@@ -61,6 +63,75 @@ typedef struct
 tNeopixelContext Svetelka;
 telnet_server_config_t telnet_server_config = TELNET_SERVER_DEFAULT_CONFIG;
 CellInfo MyCellInfo;
+
+/* Re-scan guard: last sr_id we called ReserveAction for and when (ms). Reader-side only. */
+static char s_lastSeenSrId[16];
+static uint32_t s_lastActionTimestampMs;
+
+/* Empty-tag: print diagnostic block only once per tag-present; reset when card removed. */
+static bool s_emptyTagLogged;
+
+/* Upper bound for RecipeSteps; tags with more are treated as empty/uninitialized. */
+#define MAX_RECIPE_STEPS 64
+
+/*
+ * Returns true if the loaded recipe is considered "empty" (no recipe).
+ * Fills reasonBuf with a short reason (e.g. "RecipeSteps=0", "Step0 all zeros").
+ */
+static bool NFC_IsRecipeEmpty(const TRecipeInfo *info, const TRecipeStep *steps, int stepCount,
+                              char *reasonBuf, size_t reasonBufSize)
+{
+  if (reasonBufSize > 0)
+    reasonBuf[0] = '\0';
+  if (!info)
+  {
+    if (reasonBufSize > 0)
+      snprintf(reasonBuf, reasonBufSize, "InfoNull");
+    return true;
+  }
+  /* B) RecipeSteps == 0 or > MAX_RECIPE_STEPS */
+  if (info->RecipeSteps == 0)
+  {
+    if (reasonBufSize > 0)
+      snprintf(reasonBuf, reasonBufSize, "RecipeSteps=0");
+    return true;
+  }
+  if (info->RecipeSteps > MAX_RECIPE_STEPS)
+  {
+    if (reasonBufSize > 0)
+      snprintf(reasonBuf, reasonBufSize, "RecipeSteps>%d", MAX_RECIPE_STEPS);
+    return true;
+  }
+  /* steps NULL with positive step count is invalid (e.g. load failure) */
+  if (steps == NULL && stepCount > 0)
+  {
+    if (reasonBufSize > 0)
+      snprintf(reasonBuf, reasonBufSize, "StepsNull");
+    return true;
+  }
+  /* C) ActualRecipeStep out of bounds and not a valid "done" state */
+  if (stepCount > 0 && (unsigned)info->ActualRecipeStep >= (unsigned)stepCount && !info->RecipeDone)
+  {
+    if (reasonBufSize > 0)
+      snprintf(reasonBuf, reasonBufSize, "ActualStepOutOfBounds");
+    return true;
+  }
+  /* D) First step and recipe info look uninitialized (all zeros) */
+  if (stepCount > 0 && steps != NULL)
+  {
+    const TRecipeStep *s0 = &steps[0];
+    if (s0->TypeOfProcess == 0 && s0->ParameterProcess1 == 0 && s0->ParameterProcess2 == 0
+        && s0->ProcessCellID == 0 && s0->TransportCellID == 0
+        && info->ID == 0 && info->NumOfDrinks == 0 && info->ActualBudget == 0
+        && info->Parameters == 0 && info->RightNumber == 0)
+    {
+      if (reasonBufSize > 0)
+        snprintf(reasonBuf, reasonBufSize, "Step0 and info zeros");
+      return true;
+    }
+  }
+  return false;
+}
 
 #define NFC_STATE_DEBUG_EN 1
 
@@ -127,6 +198,7 @@ void State_Machine(void *pvParameter)
     if (!Parametry->CardOnReader && RAF != State_WaitUntilRemoved)
     {
       RAF = State_Mimo_Polozena;
+      s_emptyTagLogged = false;
       NFC_STATE_DEBUG(GetRafName(RAF), "Karta je odebrana\n");
       continue;
     }
@@ -164,13 +236,55 @@ void State_Machine(void *pvParameter)
         continue;
         break;
       }
+      /* Empty-tag check: skip PLC calls and print diagnostic once per tag-present */
+      {
+        char reasonBuf[64];
+        if (NFC_IsRecipeEmpty(&iHandlerData.sWorkingCardInfo.sRecipeInfo,
+                              iHandlerData.sWorkingCardInfo.sRecipeStep,
+                              (int)iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeSteps,
+                              reasonBuf, sizeof(reasonBuf)))
+        {
+          if (!s_emptyTagLogged)
+          {
+            char uidHex[20] = "(none)";
+            char sr_idStr[16] = "(none)";
+            if (iHandlerData.sWorkingCardInfo.sUidLength > 0)
+            {
+              size_t i, n = (size_t)iHandlerData.sWorkingCardInfo.sUidLength;
+              if (n > 7)
+                n = 7;
+              for (i = 0; i < n; i++)
+                sprintf(uidHex + 2 * i, "%02X", iHandlerData.sWorkingCardInfo.sUid[i]);
+              uidHex[2 * n] = '\0';
+              if (OPC_BuildSrIdFromUid(iHandlerData.sWorkingCardInfo.sUid, iHandlerData.sWorkingCardInfo.sUidLength, sr_idStr, sizeof(sr_idStr)))
+                /* sr_idStr already set */;
+              else
+              {
+                strncpy(sr_idStr, "(build failed)", sizeof(sr_idStr) - 1);
+                sr_idStr[sizeof(sr_idStr) - 1] = '\0';
+              }
+            }
+            printf("[NFC] EMPTY TAG / NO RECIPE DETECTED\n");
+            printf("[NFC] UID=%s  sr_id=%s\n", uidHex, sr_idStr);
+            printf("[NFC] Reason=%s\n", reasonBuf[0] ? reasonBuf : "(unknown)");
+            printf("[NFC] Action=SKIP_PLC_CALLS\n");
+            fflush(stdout);
+            s_emptyTagLogged = true;
+          }
+          RAF = State_WaitUntilRemoved;
+          continue;
+        }
+      }
       NFC_Print(iHandlerData.sWorkingCardInfo);
       NFC_STATE_DEBUG(GetRafName(RAF), "Data se nacetla\n");
-      /* PLC AAS: build sr_id from UID (now stored in TCardInfo), write CurrentId, call ReportProduct with decimal sr_id only */
+      /* PLC AAS: build sr_id from UID (now stored in TCardInfo), write CurrentId, call ReportProductEx to get OutputMessage */
       char sr_id_buf[16];
       char uidStr[15];
       uidStr[0] = '\0';
       bool have_sr_id = false;
+      char reportOutBuf[128];
+      reportOutBuf[0] = '\0';
+      bool report_call_ok = false;
       if (iHandlerData.sWorkingCardInfo.sUidLength > 0)
       {
         size_t i;
@@ -183,19 +297,18 @@ void State_Machine(void *pvParameter)
         {
           OPC_WriteCurrentId(MyCellInfo.IPAdress, uidStr);
           if (have_sr_id)
-            OPC_ReportProduct(MyCellInfo.IPAdress, sr_id_buf);
+            report_call_ok = OPC_ReportProductEx(MyCellInfo.IPAdress, sr_id_buf, reportOutBuf, sizeof(reportOutBuf));
           xSemaphoreGive(Parametry->xEthernet);
         }
       }
 #if defined(USE_PLC_AAS_FLOW) && USE_PLC_AAS_FLOW
-      /* Minimal AAS flow: ReportProduct done. Now current step -> GetSupported (optional) -> ReserveAction -> wait -> write-back */
+      /* Idempotent ReportProduct: Success or Error:8501 (already reported) -> proceed; other Error -> write tag and abort */
       if (have_sr_id && iHandlerData.sWorkingCardInfo.TRecipeInfoLoaded)
       {
-        uint8_t curStep = iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep;
-        uint8_t numSteps = iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeSteps;
-        if (curStep >= numSteps)
+        bool report_ok = report_call_ok && (strcmp(reportOutBuf, "Success") == 0 || strcmp(reportOutBuf, "Error:8501") == 0);
+        if (report_call_ok && !report_ok && strncmp(reportOutBuf, "Error:", 6) == 0)
         {
-          NFC_STATE_DEBUG(GetRafName(RAF), "AAS: step index %u >= steps %u, recipe invalid\n", (unsigned)curStep, (unsigned)numSteps);
+          NFC_STATE_DEBUG(GetRafName(RAF), "AAS: ReportProduct returned %s -> treat as failure\n", reportOutBuf);
           iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone = true;
           if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
           {
@@ -206,74 +319,108 @@ void State_Machine(void *pvParameter)
           RAF = State_Mimo_Polozena;
           continue;
         }
-        TRecipeStep *step = &iHandlerData.sWorkingCardInfo.sRecipeStep[curStep];
-        /* Build 5-field message: sr_id/priority/material/parameterA/parameterB (priority=0) */
-        char msg5[80];
-        int n = snprintf(msg5, sizeof(msg5), "%s/0/%u/%u/%u", sr_id_buf,
-                         (unsigned)step->TypeOfProcess, (unsigned)step->ParameterProcess1, (unsigned)step->ParameterProcess2);
-        if (n < 0 || (size_t)n >= sizeof(msg5))
+        if (!report_ok)
         {
-          NFC_STATE_DEBUG(GetRafName(RAF), "AAS: message build failed\n");
-          RAF = State_Mimo_Polozena;
-          continue;
+          /* Call failed or no Success/8501: fall through to legacy */
         }
-        char outBuf[128];
-        outBuf[0] = '\0';
-        if (xSemaphoreTake(Parametry->xEthernet, (TickType_t)10000) != pdTRUE)
+        else
         {
-          NFC_STATE_DEBUG(GetRafName(RAF), "AAS: no ethernet semaphore\n");
-          continue;
-        }
-        /* Optional: GetSupported; if response starts with "Error:" abort step */
-        bool ok_supported = OPC_GetSupported(MyCellInfo.IPAdress, msg5, outBuf, sizeof(outBuf));
-        if (ok_supported && outBuf[0] != '\0' && strncmp(outBuf, "Error:", 6) == 0)
-        {
-          NFC_STATE_DEBUG(GetRafName(RAF), "AAS: GetSupported returned Error -> %s\n", outBuf);
-          iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone = true; /* or mark step failed */
+          /* report_ok: always run step check first. End-of-recipe: mark done, skip GetSupported/ReserveAction */
+          uint8_t curStep = iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep;
+          uint8_t numSteps = iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeSteps;
+          if (curStep >= numSteps)
+          {
+            NFC_STATE_DEBUG(GetRafName(RAF), "AAS: step index %u >= steps %u, recipe done\n", (unsigned)curStep, (unsigned)numSteps);
+            iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone = true;
+            if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
+            {
+              NFC_Handler_WriteSafeInfo(&iHandlerData, &iHandlerData.sWorkingCardInfo.sRecipeInfo);
+              NFC_Handler_Sync(&iHandlerData);
+              xSemaphoreGive(Parametry->xNFCReader);
+            }
+            RAF = State_Mimo_Polozena;
+            continue;
+          }
+          /* Re-scan guard: same sr_id within window -> do not call ReserveAction again */
+          uint32_t now_ms = (uint32_t)pdTICKS_TO_MS(xTaskGetTickCount());
+          if (strcmp(sr_id_buf, s_lastSeenSrId) == 0 && (now_ms - s_lastActionTimestampMs) < (uint32_t)AAS_RESCAN_GUARD_MS)
+          {
+            NFC_STATE_DEBUG(GetRafName(RAF), "AAS: re-scan same sr_id within %d ms, skip ReserveAction\n", AAS_RESCAN_GUARD_MS);
+            RAF = State_WaitUntilRemoved;
+            continue;
+          }
+          TRecipeStep *step = &iHandlerData.sWorkingCardInfo.sRecipeStep[curStep];
+          /* Build 5-field message: sr_id/priority/material/parameterA/parameterB (priority=0) */
+          char msg5[80];
+          int n = snprintf(msg5, sizeof(msg5), "%s/0/%u/%u/%u", sr_id_buf,
+                           (unsigned)step->TypeOfProcess, (unsigned)step->ParameterProcess1, (unsigned)step->ParameterProcess2);
+          if (n < 0 || (size_t)n >= sizeof(msg5))
+          {
+            NFC_STATE_DEBUG(GetRafName(RAF), "AAS: message build failed\n");
+            RAF = State_Mimo_Polozena;
+            continue;
+          }
+          char outBuf[128];
+          outBuf[0] = '\0';
+          if (xSemaphoreTake(Parametry->xEthernet, (TickType_t)10000) != pdTRUE)
+          {
+            NFC_STATE_DEBUG(GetRafName(RAF), "AAS: no ethernet semaphore\n");
+            continue;
+          }
+          /* Optional: GetSupported; if response starts with "Error:" abort step */
+          bool ok_supported = OPC_GetSupported(MyCellInfo.IPAdress, msg5, outBuf, sizeof(outBuf));
+          if (ok_supported && outBuf[0] != '\0' && strncmp(outBuf, "Error:", 6) == 0)
+          {
+            NFC_STATE_DEBUG(GetRafName(RAF), "AAS: GetSupported returned Error -> %s\n", outBuf);
+            iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone = true;
+            xSemaphoreGive(Parametry->xEthernet);
+            if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
+            {
+              NFC_Handler_WriteSafeInfo(&iHandlerData, &iHandlerData.sWorkingCardInfo.sRecipeInfo);
+              NFC_Handler_Sync(&iHandlerData);
+              xSemaphoreGive(Parametry->xNFCReader);
+            }
+            RAF = State_Mimo_Polozena;
+            continue;
+          }
+          /* ReserveAction */
+          outBuf[0] = '\0';
+          bool ok_reserve = OPC_ReserveAction(MyCellInfo.IPAdress, msg5, outBuf, sizeof(outBuf));
+          if (!ok_reserve || (outBuf[0] != '\0' && strncmp(outBuf, "Error:", 6) == 0))
+          {
+            NFC_STATE_DEBUG(GetRafName(RAF), "AAS: ReserveAction failed or Error -> %s\n", outBuf);
+            iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone = true;
+            xSemaphoreGive(Parametry->xEthernet);
+            if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
+            {
+              NFC_Handler_WriteSafeInfo(&iHandlerData, &iHandlerData.sWorkingCardInfo.sRecipeInfo);
+              NFC_Handler_Sync(&iHandlerData);
+              xSemaphoreGive(Parametry->xNFCReader);
+            }
+            RAF = State_Mimo_Polozena;
+            continue;
+          }
+          /* Success: record for re-scan guard, then wait and write back */
+          (void)strncpy(s_lastSeenSrId, sr_id_buf, sizeof(s_lastSeenSrId) - 1);
+          s_lastSeenSrId[sizeof(s_lastSeenSrId) - 1] = '\0';
+          s_lastActionTimestampMs = (uint32_t)pdTICKS_TO_MS(xTaskGetTickCount());
+          OPC_AAS_WaitCompletion(AAS_COMPLETION_TIMEOUT_MS);
           xSemaphoreGive(Parametry->xEthernet);
+          step->IsStepDone = 1;
+          iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep = curStep + 1;
+          if (iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep >= numSteps)
+            iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone = true;
           if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
           {
+            NFC_Handler_WriteStep(&iHandlerData, step, curStep);
             NFC_Handler_WriteSafeInfo(&iHandlerData, &iHandlerData.sWorkingCardInfo.sRecipeInfo);
             NFC_Handler_Sync(&iHandlerData);
             xSemaphoreGive(Parametry->xNFCReader);
           }
-          RAF = State_Mimo_Polozena;
+          NFC_STATE_DEBUG(GetRafName(RAF), "AAS: step %u done, write-back OK\n", (unsigned)curStep);
+          RAF = State_WaitUntilRemoved;
           continue;
         }
-        /* ReserveAction */
-        outBuf[0] = '\0';
-        bool ok_reserve = OPC_ReserveAction(MyCellInfo.IPAdress, msg5, outBuf, sizeof(outBuf));
-        if (!ok_reserve || (outBuf[0] != '\0' && strncmp(outBuf, "Error:", 6) == 0))
-        {
-          NFC_STATE_DEBUG(GetRafName(RAF), "AAS: ReserveAction failed or Error -> %s\n", outBuf);
-          iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone = true;
-          xSemaphoreGive(Parametry->xEthernet);
-          if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
-          {
-            NFC_Handler_WriteSafeInfo(&iHandlerData, &iHandlerData.sWorkingCardInfo.sRecipeInfo);
-            NFC_Handler_Sync(&iHandlerData);
-            xSemaphoreGive(Parametry->xNFCReader);
-          }
-          RAF = State_Mimo_Polozena;
-          continue;
-        }
-        /* Success: wait for completion (timeout-based), then update recipe and write back */
-        OPC_AAS_WaitCompletion(AAS_COMPLETION_TIMEOUT_MS);
-        xSemaphoreGive(Parametry->xEthernet);
-        step->IsStepDone = 1;
-        iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep = curStep + 1;
-        if (iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep >= numSteps)
-          iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone = true;
-        if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
-        {
-          NFC_Handler_WriteStep(&iHandlerData, step, curStep);
-          NFC_Handler_WriteSafeInfo(&iHandlerData, &iHandlerData.sWorkingCardInfo.sRecipeInfo);
-          NFC_Handler_Sync(&iHandlerData);
-          xSemaphoreGive(Parametry->xNFCReader);
-        }
-        NFC_STATE_DEBUG(GetRafName(RAF), "AAS: step %u done, write-back OK\n", (unsigned)curStep);
-        RAF = State_WaitUntilRemoved;
-        continue;
       }
       /* Fall-through to legacy branch if not AAS or no sr_id */
 #endif
