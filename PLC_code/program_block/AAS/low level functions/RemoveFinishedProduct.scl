@@ -1,0 +1,41 @@
+﻿FUNCTION_BLOCK "RemoveFinishedProduct"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT 
+      itemPositionRP : Int;   // Position of actual item in reported products queue.
+      itemPositionP : DInt;   // Position of actual item in priority queue.
+      itemId : DInt;   // Id of a product.
+   END_VAR
+
+   VAR_IN_OUT 
+      priorityQueue : "typePQueueData";   // Priority Queue of products registered in this SP.
+      reportedProductsQueue : "typeArrayOfProducts";   // Queue of reported proucts in SP's sphere of influence.
+      historyBuffer : WString;   // Last finished products.
+   END_VAR
+
+   VAR_TEMP 
+      tempError : Bool;   // FALSE: No error  TRUE: An error occurred during the execution of the FB.
+      tempStatus : Word;   // 16#0000-16#7FFF: Status of the FB  16#8000-16#FFFF: Error identification (see following Table).
+      tempSubStatus : Word;   // Status or return value of called FB's, FC's and system blocks.
+   END_VAR
+
+
+BEGIN
+	"Queue_remove"(position:=#itemPositionRP,
+	               initialItem:=#priorityQueue.emptyItem,
+	               error=>#tempError,
+	               status=>#tempStatus,
+	               subFunctionStatus=>#tempSubStatus,
+	               QueueData:=#reportedProductsQueue);
+	
+	"PQueue_removeByPosition"(position:=#itemPositionP,
+	                          error=>#tempError,
+	                          status=>#tempStatus,
+	                          subFunctionStatus=>#tempSubStatus,
+	                          PQueueData:=#priorityQueue);
+	
+	"AddItemIdToBuffer"(itemId:=#itemId,
+	                    historyBuffer:=#historyBuffer);
+	
+END_FUNCTION_BLOCK
+

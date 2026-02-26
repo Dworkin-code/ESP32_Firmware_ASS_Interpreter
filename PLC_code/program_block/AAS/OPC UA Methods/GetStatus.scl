@@ -1,0 +1,86 @@
+﻿FUNCTION_BLOCK "GetStatus"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR 
+      OPC_UA_ServerMethodPre_Instance {InstructionName := 'OPC_UA_ServerMethodPre'; LibVersion := '1.0'} : OPC_UA_ServerMethodPre;
+      OPC_UA_ServerMethodPost_Instance {InstructionName := 'OPC_UA_ServerMethodPost'; LibVersion := '1.0'} : OPC_UA_ServerMethodPost;
+      statUAM_Status_Pre : "typeOPCUAStatus";   // UDT for OPC UA status at the start of the method.
+      statUAM_Status_Post : "typeOPCUAStatus";   // UDT for OPC UA status at the end of the method.
+      UAMethod_InParameters : Struct   // Input parameters for OPC UA method.
+         InputMessage : WString;
+      END_STRUCT;
+      UAMethod_OutParameters : Struct   // Output parameters for OPC UA method.
+         OutputMessage : WString;
+      END_STRUCT;
+   END_VAR
+
+   VAR_TEMP 
+      tempUAM_MethodHandling : "typeOPCUAMethodhandling";   // UDT for handling OPC UA methods.
+      InputArray : "typeArrayMessage";   // UDT for input message.
+      tempFound : Bool;   // item was found in PQueue.
+      tempPosition : DInt;   // Position of item in PQueue.
+      tempError : Bool;   // FALSE: No error  TRUE: An error occurred during the execution of the FB.
+      tempStatus : DInt;   // 16#0000-16#7FFF: Status of the FB  16#8000-16#FFFF: Error identification (see following Table).
+      tempItemId : DInt;   // Temporary variable to store item id.
+      tempErrValue : Word;   // Error code of HTA function.
+   END_VAR
+
+
+BEGIN
+	REGION ServerMethodPre
+	    #OPC_UA_ServerMethodPre_Instance(Done => #statUAM_Status_Pre.done,
+	                                     Busy => #statUAM_Status_Pre.busy,
+	                                     Error => #statUAM_Status_Pre.error,
+	                                     Status => #statUAM_Status_Pre.status,
+	                                     UAMethod_Called => #tempUAM_MethodHandling.UAMethod_Called,
+	                                     UAMethod_InParameters := #UAMethod_InParameters);
+	END_REGION ServerMethodPre
+	
+	REGION Method called
+	    IF #tempUAM_MethodHandling.UAMethod_Called THEN
+	        #InputArray := "GetMessage"(WSTRING_TO_STRING(#UAMethod_InParameters.InputMessage));
+	        #tempItemId := STRING_TO_DINT(#InputArray.element[0]);
+	        IF #tempItemId <> 0 THEN
+	            "PQueue_find"(id := #tempItemId,
+	                          error => #tempError,
+	                          status => #tempStatus,
+	                          found => #tempFound,
+	                          productPosition => #tempPosition,
+	                          PQueueData := "PQueue".PQueue);
+	            
+	            IF #tempFound = FALSE THEN
+	                #tempError := TRUE;
+	                #tempStatus := "PQErrItemNotFound";
+	            END_IF;
+	        ELSE
+	            #tempError := TRUE;
+	            #tempStatus := "PQErrInvalidItemId";
+	        END_IF;
+	        
+	        IF #tempError THEN
+	            #tempErrValue := HTA(IN := #tempStatus, N := 4, OUT => #UAMethod_OutParameters."OutputMessage");
+	            #UAMethod_OutParameters."OutputMessage" := DELETE(IN := #UAMethod_OutParameters."OutputMessage", L := 4, P := 1);
+	            #UAMethod_OutParameters."OutputMessage" := CONCAT_WSTRING(IN1 := WSTRING#'Error:', IN2 := #UAMethod_OutParameters."OutputMessage");
+	        ELSE
+	            IF #tempPosition <> "PQueue".PQueue.activeItemPosition THEN
+	                #UAMethod_OutParameters."OutputMessage" := CONCAT_WSTRING(IN1 := WSTRING#'position:', IN2 := DELETE(IN := DINT_TO_WSTRING(#tempPosition), L := 1, P := 1));
+	            ELSE
+	                #UAMethod_OutParameters."OutputMessage" := WSTRING#'inProgress';
+	            END_IF;
+	        END_IF;
+	        #tempUAM_MethodHandling.UAMethod_Result := "OpcUa_Good";
+	        #tempUAM_MethodHandling.UAMethod_Finished := TRUE;
+	    END_IF;
+	END_REGION Method called
+	
+	REGION ServerMethodPost
+	    #OPC_UA_ServerMethodPost_Instance(UAMethod_Result := #tempUAM_MethodHandling.UAMethod_Result,
+	                                      UAMethod_Finished := #tempUAM_MethodHandling.UAMethod_Finished,
+	                                      Done => #statUAM_Status_Post.done,
+	                                      Busy => #statUAM_Status_Post.busy,
+	                                      Error => #statUAM_Status_Post.error,
+	                                      Status => #statUAM_Status_Post.status,
+	                                      UAMethod_OutParameters := #UAMethod_OutParameters);
+	END_REGION ServerMethodPost
+END_FUNCTION_BLOCK
+

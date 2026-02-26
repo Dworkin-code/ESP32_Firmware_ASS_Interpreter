@@ -1,0 +1,30 @@
+﻿FUNCTION "GetPQueueStatus" : Void
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT 
+      subElementCount : Array[0.."QueueCountSmall"] of DInt;   // Numbers of products in subQueues.
+   END_VAR
+
+   VAR_OUTPUT 
+      queueStatus : WString;   // Status of priority queue.
+   END_VAR
+
+   VAR_TEMP 
+      i : Int;   // Variable for 'for cycle'.
+      tempQueueStatus : WString;   // Temporary status of priority queue. For instances, when client reads this value in the midle of a program run.
+   END_VAR
+
+
+BEGIN
+	#tempQueueStatus := DINT_TO_WSTRING(#subElementCount["QueueCountSmall"]);
+	#tempQueueStatus := DELETE(IN := #tempQueueStatus, L := 1, P := 1);   // delete a '+' sign
+	FOR #i := "QueueCountSmall" - 1 TO 0 BY -1 DO
+	    #tempQueueStatus := CONCAT_WSTRING(IN1 := WSTRING#'/', IN2 := #tempQueueStatus);
+	    #tempQueueStatus := CONCAT_WSTRING(IN1 := DINT_TO_WSTRING(#subElementCount[#i]), IN2 := #tempQueueStatus);
+	    #tempQueueStatus := DELETE(IN := #tempQueueStatus, L := 1, P := 1);   // delete a '+' sign
+	END_FOR;
+	
+	#queueStatus := #tempQueueStatus;
+	
+END_FUNCTION
+

@@ -684,6 +684,80 @@ bool OPC_ReportProduct(const char *endpoint, const char *sr_id_decimal)
     return true;
 }
 
+/* ReportProductEx: returns call success and fills outBuf with OutputMessage (Success / Error:XXXX). Logs sr_id digits only. */
+bool OPC_ReportProductEx(const char *endpoint, const char *sr_id_decimal, char *outBuf, size_t outSize)
+{
+    if (!endpoint || !sr_id_decimal)
+    {
+        ESP_LOGE(TAG, "OPC_ReportProductEx: invalid args");
+        return false;
+    }
+    for (const char *p = sr_id_decimal; *p; p++)
+    {
+        if (!isdigit((unsigned char)*p))
+        {
+            ESP_LOGE(TAG, "OPC_ReportProductEx: sr_id must be decimal digits only, got \"%s\"", sr_id_decimal);
+            return false;
+        }
+    }
+    if (sr_id_decimal[0] == '0' && sr_id_decimal[1] == '\0')
+    {
+        ESP_LOGE(TAG, "OPC_ReportProductEx: sr_id must not be 0");
+        return false;
+    }
+    size_t len = strlen(sr_id_decimal);
+    if (len >= 12)
+    {
+        ESP_LOGE(TAG, "OPC_ReportProductEx: sr_id string too long");
+        return false;
+    }
+    if (outBuf && outSize > 0)
+        outBuf[0] = '\0';
+    ESP_LOGI(TAG, "OPC_ReportProductEx: sr_id=\"%s\" (digits only)", sr_id_decimal);
+
+    UA_Client *client = NULL;
+    if (!ClientStart(&client, endpoint))
+    {
+        ESP_LOGE(TAG, "OPC_ReportProductEx: connect failed");
+        return false;
+    }
+
+    UA_String inputMsg = UA_String_fromChars(sr_id_decimal);
+    UA_Variant inputVar;
+    UA_Variant_init(&inputVar);
+    UA_Variant_setScalar(&inputVar, &inputMsg, &UA_TYPES[UA_TYPES_STRING]);
+
+    UA_Variant *output = NULL;
+    size_t outputSize = 0;
+    UA_NodeId methodId = UA_NODEID_NUMERIC(PLC_NODEID_METHOD_NS, PLC_NODEID_REPORTPRODUCT_ID);
+    UA_StatusCode ret = UA_Client_call(client, methodId, methodId, 1, &inputVar, &outputSize, &output);
+    UA_String_deleteMembers(&inputMsg);
+
+    if (ret != UA_STATUSCODE_GOOD)
+    {
+        ESP_LOGE(TAG, "OPC_ReportProductEx: call failed 0x%08" PRIx32, (uint32_t)ret);
+        UA_Client_disconnect(client);
+        UA_Client_delete(client);
+        return false;
+    }
+    if (outBuf && outSize > 0 && outputSize > 0 && output && output[0].data && output[0].type == &UA_TYPES[UA_TYPES_STRING])
+    {
+        UA_String *outStr = (UA_String *)output[0].data;
+        if (outStr->length > 0 && outStr->data)
+        {
+            size_t copyLen = outStr->length < outSize - 1 ? outStr->length : outSize - 1;
+            memcpy(outBuf, outStr->data, copyLen);
+            outBuf[copyLen] = '\0';
+            ESP_LOGI(TAG, "OPC_ReportProductEx: OutputMessage=%s", outBuf);
+        }
+    }
+    if (output)
+        UA_Array_delete(output, outputSize, &UA_TYPES[UA_TYPES_VARIANT]);
+    UA_Client_disconnect(client);
+    UA_Client_delete(client);
+    return true;
+}
+
 /* Generic AAS method call: InputMessage (STRING) -> OutputMessage (STRING). Returns true on UA success. */
 static bool OPC_CallAasMethod(const char *endpoint, uint32_t methodNodeId, const char *inputMessage,
                               char *outBuf, size_t outSize)

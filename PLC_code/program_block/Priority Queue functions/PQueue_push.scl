@@ -1,0 +1,43 @@
+﻿FUNCTION "PQueue_push" : Void
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT 
+      item : "typeProductInQueue";   // Pushed item.
+      priority : UInt;   // Priority of a product.
+   END_VAR
+
+   VAR_OUTPUT 
+      error : Bool;   // FALSE: No error  TRUE: An error occurred during the execution of the FB.
+      status : Word;   // 16#0000-16#7FFF: Status of the FB  16#8000-16#FFFF: Error identification (see following Table).
+      subFunctionStatus : Word;   // Status or return value of called FB's, FC's and system blocks.
+   END_VAR
+
+   VAR_IN_OUT 
+      PQueueData : "typePQueueData";   // Priority Queue data.
+   END_VAR
+
+
+BEGIN
+	// TODO: add checking of PQueueData
+	
+	
+	REGION push
+	    IF #PQueueData.isFullBuffer[#priority] THEN
+	        #error := TRUE;
+	        #status := "PQErrBufferIsFull";
+	        RETURN;
+	    ELSE
+	        "Queue_push"(item := #item,
+	                     error => #error,
+	                     status => #status,
+	                     subFunctionStatus => #subFunctionStatus,
+	                     QueueData := #PQueueData.buffer[#priority]);
+	        #PQueueData.queueProductCount := #PQueueData.queueProductCount + 1;
+	        #PQueueData.subElementCount[#priority] := #PQueueData.subElementCount[#priority] + 1;
+	        
+	        #PQueueData.isFullBuffer[#priority] := #PQueueData.buffer[#priority].staticQueueVariables.statElementCount = "SubQueueCount";
+	        #PQueueData.isEmptyBuffer[#priority] := #PQueueData.buffer[#priority].staticQueueVariables.statElementCount = 0;
+	    END_IF;
+	END_REGION push
+END_FUNCTION
+
