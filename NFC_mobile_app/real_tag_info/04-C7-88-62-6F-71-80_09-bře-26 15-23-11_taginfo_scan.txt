@@ -1,0 +1,129 @@
+** TagInfo Scan (version 6.2.0) 09-bře-26 15:23:11 **
+Report Type: -- IC INFO ------------------------------
+
+# IC Manufacturer:
+NXP Semiconductors
+
+# IC Type:
+NTAG213
+
+-- NDEF ------------------------------
+
+# No NDEF Message present:
+
+# Control TLVs:
+Lock Control TLV at address 0x04, offset 0
+* Dynamic lock bytes at address 0x28, offset 0
+	- 12 lock bits
+	- 8 bytes locked per lock bit
+ 01 03 A0 0C 34                                  |....4           |
+
+
+-- EXTRA ------------------------------
+
+# Memory Information:
+144 bytes user memory
+* 36 pages, with 4 bytes per page
+
+# IC Information:
+Full product name: NT2H1311G0DUx
+
+# Version information:
+Vendor ID: NXP Semiconductors
+Type: NTAG
+Subtype: 50 pF
+Major version: 1
+Minor version: V0
+Storage size: 144 bytes
+Protocol: ISO/IEC 14443-3
+
+
+# Configuration information:
+ASCII mirror disabled
+NFC counter: disabled
+No limit on wrong password attempts
+Strong load modulation enabled
+
+# Originality Check (asymmetric):
+Signature verified with NXP public key
+
+# TagInfo Version:
+Version :6.2.0
+
+# Device Info:
+Device Model :samsung ( SM-S926B )
+Android OS Version :16
+
+-- FULL SCAN ------------------------------
+
+# Technologies Supported:
+ISO/IEC 14443-3 (Type A) compatible
+ISO/IEC 14443-2 (Type A) compatible
+
+# Android Technology Information:
+Tag description:
+* TAG: Tech [android.nfc.tech.NfcA, android.nfc.tech.MifareUltralight, android.nfc.tech.Ndef]
+* Maximum transceive length: 253 bytes
+* Default maximum transceive time-out: 618 ms
+
+
+# Detailed Protocol Information:
+ID: 04:C7:88:62:6F:71:80
+ATQA: 0x4400
+SAK: 0x00
+
+# Memory Content:
+[00] *  04:C7:88 C3 (UID0-UID2, BCC0)
+[01] *  62:6F:71:80 (UID3-UID6)
+[02] .  FC 48 00 00 (BCC1, INT, LOCK0-LOCK1)
+[03] .  E1:10:12:00 (OTP0-OTP3)
+[04] .  01 03 A0 0C |....|
+[05] .  34 03 00 FE |4...|
+[06] .  00 00 00 00 |....|
+[07] .  00 00 00 00 |....|
+[08] .  01 00 00 01 |....|
+[09] .  01 00 00 00 |....|
+[0A] .  FE 01 18 00 |....|
+[0B] .  00 00 00 00 |....|
+[0C] .  00 00 00 00 |....|
+[0D] .  00 00 00 00 |....|
+[0E] .  00 00 00 00 |....|
+[0F] .  00 00 00 00 |....|
+[10] .  00 00 00 00 |....|
+[11] .  00 00 00 00 |....|
+[12] .  00 00 08 00 |....|
+[13] .  00 00 00 00 |....|
+[14] .  00 00 00 00 |....|
+[15] .  00 00 00 00 |....|
+[16] .  00 00 00 00 |....|
+[17] .  00 00 00 00 |....|
+[18] .  00 00 00 00 |....|
+[19] .  00 00 00 00 |....|
+[1A] .  00 00 00 00 |....|
+[1B] .  00 00 00 00 |....|
+[1C] .  00 00 00 00 |....|
+[1D] .  00 00 00 00 |....|
+[1E] .  00 00 00 00 |....|
+[1F] .  00 00 00 00 |....|
+[20] .  00 00 00 00 |....|
+[21] .  00 00 00 00 |....|
+[22] .  00 00 00 00 |....|
+[23] .  00 00 00 00 |....|
+[24] .  00 00 00 00 |....|
+[25] .  00 00 00 00 |....|
+[26] .  00 00 00 00 |....|
+[27] .  00 00 00 00 |....|
+[28] .  00 00 00 BD (LOCK2-LOCK4, CHK)
+[29] .  04 00 00 FF (CFG, MIRROR, AUTH0)
+[2A] .  00 05 -- -- (ACCESS)
+[2B] +P FF FF FF FF (PWD0-PWD3)
+[2C] +P 00 00 -- -- (PACK0-PACK1)
+
+  *:locked & blocked, x:locked,
+  +:blocked, .:un(b)locked, ?:unknown
+  r:readable (write-protected),
+  p:password protected, -:write-only
+  P:password protected write-only
+
+--------------------------------------
+

@@ -208,12 +208,14 @@ void connection_scan()
     }
 
     esp_netif_ip_info_t ip_info;
-    IP4_ADDR(&ip_info.ip,      192, 168, 0, 10);  // IP čtečky
-    IP4_ADDR(&ip_info.gw,      192, 168, 0, 1);   // gateway (IP PLC nebo klidně 0.0.0.0)
-    IP4_ADDR(&ip_info.netmask, 255, 255, 255, 0); // maska
+    IP4_ADDR(&ip_info.ip,      192, 168, 168, 10);  // Reader IP (PLC subnet)
+    IP4_ADDR(&ip_info.gw,      192, 168, 168, 1);  // Gateway
+    IP4_ADDR(&ip_info.netmask, 255, 255, 255, 0); // Netmask
 
     ESP_ERROR_CHECK(esp_netif_set_ip_info(eth_netif, &ip_info));
-    OPC_KLIENT_DEBUG(TAG, "Nastavuji statickou IP: 192.168.0.10\n");
+    ESP_LOGI(TAG, "Ethernet static IP configured: " IPSTR " / " IPSTR " gw " IPSTR,
+             IP2STR(&ip_info.ip), IP2STR(&ip_info.netmask), IP2STR(&ip_info.gw));
+    OPC_KLIENT_DEBUG(TAG, "Nastavuji statickou IP: 192.168.168.10\n");
 
     // Register user defined event handlers
     ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, &eth_event_handler, NULL));
@@ -235,8 +237,8 @@ bool ClientStart(UA_Client **iManagement_client, const char *IPAdress)
     OPC_KLIENT_DEBUG(TAG, "Start OPC Klient\n");
 
     /* Složení úplného endpoint URL pro open62541:
-       IPAdress = "192.168.0.1:4840"
-       endpoint = "opc.tcp://192.168.0.1:4840"
+       IPAdress = "192.168.168.63:4840"  (PLC – jediný zdroj: MyCellInfo.IPAdress v app.c)
+       endpoint = "opc.tcp://192.168.168.63:4840"
     */
     char endpointUrl[128];
     snprintf(endpointUrl, sizeof(endpointUrl), "opc.tcp://%s", IPAdress);
@@ -535,6 +537,7 @@ uint8_t Occupancy(CellInfo aCellInfo, bool Okupovani)
 #define PLC_NODEID_GETSUPPORTED_ID 7003
 #define PLC_NODEID_RESERVEACTION_ID 7005
 #define PLC_NODEID_FREEFROMPOSITION_ID 7000
+#define PLC_NODEID_GETSTATUS_ID 7002
 /* ActionStatus variable for optional completion polling: ns=4;i=6100 */
 #define PLC_NODEID_ACTIONSTATUS_NS 4
 #define PLC_NODEID_ACTIONSTATUS_ID 6100
@@ -828,9 +831,54 @@ bool OPC_FreeFromPosition(const char *endpoint, const char *sr_id_decimal, char 
     return OPC_CallAasMethod(endpoint, PLC_NODEID_FREEFROMPOSITION_ID, sr_id_decimal, outBuf, outSize);
 }
 
-/* Wait for step completion: no PLC code change — use timeout. Optionally poll ActionStatus if needed later. */
+/* GetStatus(InputMessage): pass sr_id (decimal string). Returns "running", "finished", "error:XXXX", "position:N", or "inProgress". */
+bool OPC_GetStatus(const char *endpoint, const char *sr_id_decimal, char *outBuf, size_t outSize)
+{
+    if (!endpoint || !sr_id_decimal || !outBuf || outSize == 0)
+        return false;
+    return OPC_CallAasMethod(endpoint, PLC_NODEID_GETSTATUS_ID, sr_id_decimal, outBuf, outSize);
+}
+
+/* Poll GetStatus until "finished", "error:XXXX", or global timeout. Uses real PLC handshake instead of fixed delay. */
 void OPC_AAS_WaitCompletion(uint32_t timeout_ms)
 {
-    ESP_LOGI(TAG, "OPC_AAS_WaitCompletion: waiting %" PRIu32 " ms (timeout-based)", (uint32_t)timeout_ms);
+    /* Legacy: if no endpoint/sr_id context, fall back to fixed delay (e.g. when called without prior ReserveAction). */
+    ESP_LOGI(TAG, "OPC_AAS_WaitCompletion: timeout %" PRIu32 " ms (caller should use OPC_AAS_WaitCompletionPoll with endpoint and sr_id for handshake)", (uint32_t)timeout_ms);
     vTaskDelay(timeout_ms / portTICK_PERIOD_MS);
+}
+
+/* Poll GetStatus until "finished", "error:XXXX", or timeout. Returns true on "finished", false on error or timeout. */
+bool OPC_AAS_WaitCompletionPoll(const char *endpoint, const char *sr_id_decimal, uint32_t timeout_ms, uint32_t poll_interval_ms)
+{
+    if (!endpoint || !sr_id_decimal)
+        return false;
+    if (poll_interval_ms == 0)
+        poll_interval_ms = 500;
+    uint32_t elapsed = 0;
+    char outBuf[64];
+    ESP_LOGI(TAG, "OPC_AAS_WaitCompletionPoll: sr_id=%s, timeout %" PRIu32 " ms, poll every %" PRIu32 " ms", sr_id_decimal, (uint32_t)timeout_ms, (uint32_t)poll_interval_ms);
+    while (elapsed < timeout_ms)
+    {
+        outBuf[0] = '\0';
+        if (!OPC_GetStatus(endpoint, sr_id_decimal, outBuf, sizeof(outBuf)))
+        {
+            vTaskDelay(poll_interval_ms / portTICK_PERIOD_MS);
+            elapsed += poll_interval_ms;
+            continue;
+        }
+        if (strcmp(outBuf, "finished") == 0)
+        {
+            ESP_LOGI(TAG, "OPC_AAS_WaitCompletionPoll: finished");
+            return true;
+        }
+        if (strncmp(outBuf, "error:", 6) == 0)
+        {
+            ESP_LOGE(TAG, "OPC_AAS_WaitCompletionPoll: %s", outBuf);
+            return false;
+        }
+        vTaskDelay(poll_interval_ms / portTICK_PERIOD_MS);
+        elapsed += poll_interval_ms;
+    }
+    ESP_LOGE(TAG, "OPC_AAS_WaitCompletionPoll: timeout after %" PRIu32 " ms", (uint32_t)timeout_ms);
+    return false;
 }

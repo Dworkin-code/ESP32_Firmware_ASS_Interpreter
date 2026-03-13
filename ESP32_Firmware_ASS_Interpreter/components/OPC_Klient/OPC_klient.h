@@ -77,6 +77,8 @@ bool OPC_ReserveAction(const char *endpoint, const char *inputMessage_5field, ch
 bool OPC_FreeFromPosition(const char *endpoint, const char *sr_id_decimal, char *outBuf, size_t outSize);
 /* Wait for AAS step completion (timeout-based; no PLC change). */
 void OPC_AAS_WaitCompletion(uint32_t timeout_ms);
+/* Poll GetStatus until finished / error / timeout; uses PLC AAS handshake. */
+bool OPC_AAS_WaitCompletionPoll(const char *endpoint, const char *sr_id_decimal, uint32_t timeout_ms, uint32_t poll_interval_ms);
 
 #ifdef __cplusplus
 }
