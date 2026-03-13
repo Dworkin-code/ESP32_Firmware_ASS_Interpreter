@@ -1,0 +1,187 @@
+** TagInfo Scan (version 6.2.0) 09-bře-26 15:24:47 **
+Report Type: -- IC INFO ------------------------------
+
+# IC Manufacturer:
+Unknown Manufacturer
+
+# IC Type:
+Unknown MIFARE Classic IC, possibly cloned
+
+# Applications:
+Multi-application card
+* Unknown application 0x0100
+* Card adminstration
+
+-- NDEF ------------------------------
+
+# No NDEF Data Storage Populated:
+
+-- EXTRA ------------------------------
+
+# Memory Information:
+1 kB
+* 16 sectors, with 4 blocks per sector
+* 64 blocks, with 16 bytes per block
+
+# Application Directory:
+CRC sector 0: ERROR
+Application classes:
+
+  DIR      misc   [empty]  [empty]    card   [empty]  [empty]  [empty] 
+[empty]  [empty]  [empty]  [empty]  [empty]  [empty]  [empty]  [empty] 
+
+
+# Block 0 analysis:
+UID: 82:87:09:7C
+Check Byte: 0x70
+SAK: 0x08 (ERROR)
+ATQA: 0x0400
+Manufacturer data:
+* 04 44 96 4D B9 AF E5 90 |.D.M....|
+
+# TagInfo Version:
+Version :6.2.0
+
+# Device Info:
+Device Model :samsung ( SM-S926B )
+Android OS Version :16
+
+-- FULL SCAN ------------------------------
+
+# Technologies Supported:
+ISO/IEC 14443-3 (Type A) compatible
+
+# Android Technology Information:
+Tag description:
+* TAG: Tech [android.nfc.tech.MifareClassic, android.nfc.tech.NfcA, android.nfc.tech.NdefFormatable]
+* Maximum transceive length: 253 bytes
+* Default maximum transceive time-out: 618 ms
+
+# Detailed Protocol Information:
+ID: 82:87:09:7C
+ATQA: 0x0400
+SAK: 0x08
+
+# Memory Content:
+Sector 0 (0x00)
+[00] r--  82 87 09 7C 70 08 04 00 04 44 96 4D B9 AF E5 90 |...|p....D.M....|
+[01] rW-  01 00 00 01 00 00 00 00 FE 00 00 00 00 00 00 00 |................|
+[02] rW-  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[03] WXW  A0:A1:A2:A3:A4:A5 78:77:88 C1 XX:XX:XX:XX:XX:XX
+          MAD access key                (unknown key)
+
+Sector 1 (0x01)
+[04] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[05] rwi  00 00 03 15 00 00 01 04 00 40 14 D5 F2 76 9A DA |.........@...v..|
+[06] rwi  01 F0 86 73 7F 5B 9A DA 01 09 02 03 02 01 3C 00 |...s.[........<.|
+[07] WXW  XX:XX:XX:XX:XX:XX 7F:07:88 40 FF:FF:FF:FF:FF:FF
+          (unknown key)                 Factory default key
+
+Sector 2 (0x02)
+[08] rwi  00 00 00 00 00 01 05 00 40 79 A2 10 77 9A DA 01 |........@y..w...|
+[09] rwi  00 00 00 00 00 00 00 00 08 03 04 06 00 00 00 00 |................|
+[0A] rwi  03 16 00 00 02 11 00 C0 B9 23 E1 5A 9A DA 01 F0 |.........#.Z....|
+[0B] WXW  XX:XX:XX:XX:XX:XX 7F:07:88 40 FF:FF:FF:FF:FF:FF
+          (unknown key)                 Factory default key
+
+Sector 3 (0x03)
+[0C] rwi  EB 40 9D 5B 9A DA 01 05 04 05 04 14 00 00 00 00 |.@.[............|
+[0D] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[0E] rwi  00 00 00 00 00 00 00 05 05 00 00 00 00 00 00 00 |................|
+[0F] WXW  XX:XX:XX:XX:XX:XX 7F:07:88 40 FF:FF:FF:FF:FF:FF
+          (unknown key)                 Factory default key
+
+Sector 4 (0x04)
+[10] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[11] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[12] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[13] WXW  XX:XX:XX:XX:XX:XX 7F:07:88 40 FF:FF:FF:FF:FF:FF
+          (unknown key)                 Factory default key
+
+Sector 5 (0x05)
+[14] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[15] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[16] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[17] WXW  XX:XX:XX:XX:XX:XX 7F:07:88 40 FF:FF:FF:FF:FF:FF
+          (unknown key)                 Factory default key
+
+Sector 6 (0x06)
+[18] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[19] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[1A] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[1B] WXW  XX:XX:XX:XX:XX:XX 7F:07:88 40 FF:FF:FF:FF:FF:FF
+          (unknown key)                 Factory default key
+
+Sector 7 (0x07)
+[1C] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[1D] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[1E] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[1F] WXW  XX:XX:XX:XX:XX:XX 7F:07:88 40 FF:FF:FF:FF:FF:FF
+          (unknown key)                 Factory default key
+
+Sector 8 (0x08)
+[20] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[21] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[22] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[23] WXW  XX:XX:XX:XX:XX:XX 7F:07:88 40 FF:FF:FF:FF:FF:FF
+          (unknown key)                 Factory default key
+
+Sector 9 (0x09)
+[24] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[25] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[26] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[27] WXW  XX:XX:XX:XX:XX:XX 7F:07:88 40 FF:FF:FF:FF:FF:FF
+          (unknown key)                 Factory default key
+
+Sector 10 (0x0A)
+[28] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[29] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[2A] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[2B] WXW  XX:XX:XX:XX:XX:XX 7F:07:88 40 FF:FF:FF:FF:FF:FF
+          (unknown key)                 Factory default key
+
+Sector 11 (0x0B)
+[2C] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[2D] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[2E] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[2F] WXW  XX:XX:XX:XX:XX:XX 7F:07:88 40 FF:FF:FF:FF:FF:FF
+          (unknown key)                 Factory default key
+
+Sector 12 (0x0C)
+[30] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[31] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[32] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[33] WXW  XX:XX:XX:XX:XX:XX 7F:07:88 40 FF:FF:FF:FF:FF:FF
+          (unknown key)                 Factory default key
+
+Sector 13 (0x0D)
+[34] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[35] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[36] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[37] WXW  XX:XX:XX:XX:XX:XX 7F:07:88 40 FF:FF:FF:FF:FF:FF
+          (unknown key)                 Factory default key
+
+Sector 14 (0x0E)
+[38] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[39] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[3A] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[3B] WXW  XX:XX:XX:XX:XX:XX 7F:07:88 40 FF:FF:FF:FF:FF:FF
+          (unknown key)                 Factory default key
+
+Sector 15 (0x0F)
+[3C] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[3D] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[3E] rwi  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|
+[3F] WXW  XX:XX:XX:XX:XX:XX 7F:07:88 40 FF:FF:FF:FF:FF:FF
+          (unknown key)                 Factory default key
+
+r/R=read, w/W=write, i/I=increment,
+d=decr/transfer/restore, x=r+w, X=R+W
+data block: r/w/i/d:key A|B, R/W/I:key B only,
+  I/i implies d, *=value block
+trailer (order: key A, AC, key B): r/w:key A,
+  W:key B, R:key A|B, (r)=readable key
+AC: W implies R+r, R implies r
+
+--------------------------------------
+

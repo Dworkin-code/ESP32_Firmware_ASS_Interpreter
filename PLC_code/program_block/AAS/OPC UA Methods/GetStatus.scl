@@ -1,4 +1,4 @@
-﻿FUNCTION_BLOCK "GetStatus"
+FUNCTION_BLOCK "GetStatus"
 { S7_Optimized_Access := 'TRUE' }
 VERSION : 0.1
    VAR 

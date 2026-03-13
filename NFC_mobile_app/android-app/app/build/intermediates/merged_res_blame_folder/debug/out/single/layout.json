@@ -1,0 +1,30 @@
+[
+    {
+        "merged": "com.testbed.nfcrecipetag.app-mergeDebugResources-37:/layout/activity_backups.xml",
+        "source": "com.testbed.nfcrecipetag.app-main-40:/layout/activity_backups.xml"
+    },
+    {
+        "merged": "com.testbed.nfcrecipetag.app-mergeDebugResources-37:/layout/activity_scan.xml",
+        "source": "com.testbed.nfcrecipetag.app-main-40:/layout/activity_scan.xml"
+    },
+    {
+        "merged": "com.testbed.nfcrecipetag.app-mergeDebugResources-37:/layout/activity_settings.xml",
+        "source": "com.testbed.nfcrecipetag.app-main-40:/layout/activity_settings.xml"
+    },
+    {
+        "merged": "com.testbed.nfcrecipetag.app-mergeDebugResources-37:/layout/activity_write_tag.xml",
+        "source": "com.testbed.nfcrecipetag.app-main-40:/layout/activity_write_tag.xml"
+    },
+    {
+        "merged": "com.testbed.nfcrecipetag.app-mergeDebugResources-37:/layout/activity_tag_detail.xml",
+        "source": "com.testbed.nfcrecipetag.app-main-40:/layout/activity_tag_detail.xml"
+    },
+    {
+        "merged": "com.testbed.nfcrecipetag.app-mergeDebugResources-37:/layout/activity_main.xml",
+        "source": "com.testbed.nfcrecipetag.app-main-40:/layout/activity_main.xml"
+    },
+    {
+        "merged": "com.testbed.nfcrecipetag.app-mergeDebugResources-37:/layout/activity_edit_recipe.xml",
+        "source": "com.testbed.nfcrecipetag.app-main-40:/layout/activity_edit_recipe.xml"
+    }
+]

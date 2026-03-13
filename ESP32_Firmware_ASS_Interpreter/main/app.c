@@ -400,12 +400,25 @@ void State_Machine(void *pvParameter)
             RAF = State_Mimo_Polozena;
             continue;
           }
-          /* Success: record for re-scan guard, then wait and write back */
+          /* Success: record for re-scan guard, then poll GetStatus until finished or error/timeout */
           (void)strncpy(s_lastSeenSrId, sr_id_buf, sizeof(s_lastSeenSrId) - 1);
           s_lastSeenSrId[sizeof(s_lastSeenSrId) - 1] = '\0';
           s_lastActionTimestampMs = (uint32_t)pdTICKS_TO_MS(xTaskGetTickCount());
-          OPC_AAS_WaitCompletion(AAS_COMPLETION_TIMEOUT_MS);
+          bool completion_ok = OPC_AAS_WaitCompletionPoll(MyCellInfo.IPAdress, sr_id_buf, (uint32_t)AAS_COMPLETION_TIMEOUT_MS, 500);
           xSemaphoreGive(Parametry->xEthernet);
+          if (!completion_ok)
+          {
+            NFC_STATE_DEBUG(GetRafName(RAF), "AAS: completion error or timeout -> RecipeDone\n");
+            iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone = true;
+            if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
+            {
+              NFC_Handler_WriteSafeInfo(&iHandlerData, &iHandlerData.sWorkingCardInfo.sRecipeInfo);
+              NFC_Handler_Sync(&iHandlerData);
+              xSemaphoreGive(Parametry->xNFCReader);
+            }
+            RAF = State_Mimo_Polozena;
+            continue;
+          }
           step->IsStepDone = 1;
           iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep = curStep + 1;
           if (iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep >= numSteps)
@@ -1083,11 +1096,13 @@ void app_main()
   {
     nvs_open("DataNFC", NVS_READONLY, &nvs_handle);
   }
-  nvs_get_u8(nvs_handle, "ID_Interpretter", &MyCellInfo.IDofCell);
+  uint8_t id_interpretter = 0;
+  nvs_get_u8(nvs_handle, "ID_Interpretter", &id_interpretter);
+  MyCellInfo.IDofCell = id_interpretter;
   nvs_close(nvs_handle);
   printf("ID_Of_Interpretter: %d\n", MyCellInfo.IDofCell);
 
-  MyCellInfo.IPAdress = "192.168.0.1:4840";
+  MyCellInfo.IPAdress = "192.168.168.63:4840";
   MyCellInfo.IPAdressLenght = strlen(MyCellInfo.IPAdress);
   MyCellInfo.ProcessTypes = processTypes1;
   MyCellInfo.ProcessTypesLenght = 3;

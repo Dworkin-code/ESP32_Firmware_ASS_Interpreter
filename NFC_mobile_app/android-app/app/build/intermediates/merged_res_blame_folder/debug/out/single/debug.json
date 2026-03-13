@@ -1,0 +1,38 @@
+[
+    {
+        "merged": "com.testbed.nfcrecipetag.app-merged_res-38:/layout_activity_write_tag.xml.flat",
+        "source": "com.testbed.nfcrecipetag.app-main-40:/layout/activity_write_tag.xml"
+    },
+    {
+        "merged": "com.testbed.nfcrecipetag.app-merged_res-38:/xml_nfc_tech_filter.xml.flat",
+        "source": "com.testbed.nfcrecipetag.app-main-40:/xml/nfc_tech_filter.xml"
+    },
+    {
+        "merged": "com.testbed.nfcrecipetag.app-merged_res-38:/layout_activity_edit_recipe.xml.flat",
+        "source": "com.testbed.nfcrecipetag.app-main-40:/layout/activity_edit_recipe.xml"
+    },
+    {
+        "merged": "com.testbed.nfcrecipetag.app-merged_res-38:/layout_activity_settings.xml.flat",
+        "source": "com.testbed.nfcrecipetag.app-main-40:/layout/activity_settings.xml"
+    },
+    {
+        "merged": "com.testbed.nfcrecipetag.app-merged_res-38:/layout_activity_main.xml.flat",
+        "source": "com.testbed.nfcrecipetag.app-main-40:/layout/activity_main.xml"
+    },
+    {
+        "merged": "com.testbed.nfcrecipetag.app-merged_res-38:/layout_activity_tag_detail.xml.flat",
+        "source": "com.testbed.nfcrecipetag.app-main-40:/layout/activity_tag_detail.xml"
+    },
+    {
+        "merged": "com.testbed.nfcrecipetag.app-merged_res-38:/layout_activity_backups.xml.flat",
+        "source": "com.testbed.nfcrecipetag.app-main-40:/layout/activity_backups.xml"
+    },
+    {
+        "merged": "com.testbed.nfcrecipetag.app-merged_res-38:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "com.testbed.nfcrecipetag.app-main-40:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "com.testbed.nfcrecipetag.app-merged_res-38:/layout_activity_scan.xml.flat",
+        "source": "com.testbed.nfcrecipetag.app-main-40:/layout/activity_scan.xml"
+    }
+]
