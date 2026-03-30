@@ -30,7 +30,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Duration [s]"
+            android:text="Parameter 1 (Support A / Duration [s])"
             android:layout_marginEnd="8dp" />
         <EditText
             android:id="@+id/step_editor_duration"
@@ -39,5 +39,149 @@
             android:inputType="number"
             android:minWidth="80dp"
             android:maxLength="3" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/step_editor_support_b_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="4dp">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Parameter 2 (Support B / ml)"
+            android:layout_marginEnd="8dp" />
+        <EditText
+            android:id="@+id/step_editor_support_b"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:minWidth="80dp"
+            android:maxLength="4" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/step_editor_human_summary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textSize="12sp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Transport / process routing (raw numeric)" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="4dp">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Transport cell (ID, ResID)"
+            android:layout_marginEnd="8dp" />
+        <EditText
+            android:id="@+id/step_editor_transport_cell_id"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:minWidth="48dp"
+            android:maxLength="3" />
+        <EditText
+            android:id="@+id/step_editor_transport_cell_res_id"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:minWidth="72dp"
+            android:maxLength="5"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="4dp">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Process cell (ID, ResID)"
+            android:layout_marginEnd="8dp" />
+        <EditText
+            android:id="@+id/step_editor_process_cell_id"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:minWidth="48dp"
+            android:maxLength="3" />
+        <EditText
+            android:id="@+id/step_editor_process_cell_res_id"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:minWidth="72dp"
+            android:maxLength="5"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="4dp">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Prices (transport, process)"
+            android:layout_marginEnd="8dp" />
+        <EditText
+            android:id="@+id/step_editor_price_transport"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:minWidth="48dp"
+            android:maxLength="4" />
+        <EditText
+            android:id="@+id/step_editor_price_process"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:minWidth="48dp"
+            android:maxLength="4"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="4dp">
+        <CheckBox
+            android:id="@+id/step_editor_need_transport"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="NeedForTransport" />
+        <CheckBox
+            android:id="@+id/step_editor_is_transport"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="IsTransport"
+            android:layout_marginStart="8dp" />
+        <CheckBox
+            android:id="@+id/step_editor_is_process"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="IsProcess"
+            android:layout_marginStart="8dp" />
+        <CheckBox
+            android:id="@+id/step_editor_is_done"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="IsStepDone"
+            android:layout_marginStart="8dp" />
     </LinearLayout>
 </LinearLayout>

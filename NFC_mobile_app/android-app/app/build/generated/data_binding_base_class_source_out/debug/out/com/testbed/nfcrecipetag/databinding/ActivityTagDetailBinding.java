@@ -6,11 +6,11 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewbinding.ViewBinding;
 import androidx.viewbinding.ViewBindings;
 import com.testbed.nfcrecipetag.R;
@@ -26,69 +26,48 @@ public final class ActivityTagDetailBinding implements ViewBinding {
   public final Button btnEditRecipe;
 
   @NonNull
-  public final Button btnLoadTestRecipe;
+  public final Button btnSaveBackup;
 
   @NonNull
-  public final Button btnSaveBackup;
+  public final Button btnSet4Steps;
 
   @NonNull
   public final Button btnWriteTag;
 
   @NonNull
-  public final TextView checksumStatus;
-
-  @NonNull
-  public final TextView headerBudget;
-
-  @NonNull
-  public final TextView headerId;
-
-  @NonNull
-  public final TextView headerNumDrinks;
-
-  @NonNull
-  public final TextView headerSteps;
-
-  @NonNull
-  public final TextView integrityStatus;
-
-  @NonNull
-  public final TextView memorySize;
-
-  @NonNull
   public final EditText rawHex;
 
   @NonNull
-  public final RecyclerView recyclerSteps;
+  public final LinearLayout stepLayoutContainer;
 
   @NonNull
-  public final TextView tagType;
+  public final TextView stepLayoutTitle;
 
   @NonNull
-  public final TextView tagUid;
+  public final TextView tagBasicInfo;
+
+  @NonNull
+  public final TextView tagHeaderTitle;
+
+  @NonNull
+  public final TextView tagHeaderValues;
 
   private ActivityTagDetailBinding(@NonNull ScrollView rootView, @NonNull Button btnEditRecipe,
-      @NonNull Button btnLoadTestRecipe, @NonNull Button btnSaveBackup, @NonNull Button btnWriteTag,
-      @NonNull TextView checksumStatus, @NonNull TextView headerBudget, @NonNull TextView headerId,
-      @NonNull TextView headerNumDrinks, @NonNull TextView headerSteps,
-      @NonNull TextView integrityStatus, @NonNull TextView memorySize, @NonNull EditText rawHex,
-      @NonNull RecyclerView recyclerSteps, @NonNull TextView tagType, @NonNull TextView tagUid) {
+      @NonNull Button btnSaveBackup, @NonNull Button btnSet4Steps, @NonNull Button btnWriteTag,
+      @NonNull EditText rawHex, @NonNull LinearLayout stepLayoutContainer,
+      @NonNull TextView stepLayoutTitle, @NonNull TextView tagBasicInfo,
+      @NonNull TextView tagHeaderTitle, @NonNull TextView tagHeaderValues) {
     this.rootView = rootView;
     this.btnEditRecipe = btnEditRecipe;
-    this.btnLoadTestRecipe = btnLoadTestRecipe;
     this.btnSaveBackup = btnSaveBackup;
+    this.btnSet4Steps = btnSet4Steps;
     this.btnWriteTag = btnWriteTag;
-    this.checksumStatus = checksumStatus;
-    this.headerBudget = headerBudget;
-    this.headerId = headerId;
-    this.headerNumDrinks = headerNumDrinks;
-    this.headerSteps = headerSteps;
-    this.integrityStatus = integrityStatus;
-    this.memorySize = memorySize;
     this.rawHex = rawHex;
-    this.recyclerSteps = recyclerSteps;
-    this.tagType = tagType;
-    this.tagUid = tagUid;
+    this.stepLayoutContainer = stepLayoutContainer;
+    this.stepLayoutTitle = stepLayoutTitle;
+    this.tagBasicInfo = tagBasicInfo;
+    this.tagHeaderTitle = tagHeaderTitle;
+    this.tagHeaderValues = tagHeaderValues;
   }
 
   @Override
@@ -124,15 +103,15 @@ public final class ActivityTagDetailBinding implements ViewBinding {
         break missingId;
       }
 
-      id = R.id.btn_load_test_recipe;
-      Button btnLoadTestRecipe = ViewBindings.findChildViewById(rootView, id);
-      if (btnLoadTestRecipe == null) {
-        break missingId;
-      }
-
       id = R.id.btn_save_backup;
       Button btnSaveBackup = ViewBindings.findChildViewById(rootView, id);
       if (btnSaveBackup == null) {
+        break missingId;
+      }
+
+      id = R.id.btn_set_4_steps;
+      Button btnSet4Steps = ViewBindings.findChildViewById(rootView, id);
+      if (btnSet4Steps == null) {
         break missingId;
       }
 
@@ -142,75 +121,45 @@ public final class ActivityTagDetailBinding implements ViewBinding {
         break missingId;
       }
 
-      id = R.id.checksum_status;
-      TextView checksumStatus = ViewBindings.findChildViewById(rootView, id);
-      if (checksumStatus == null) {
-        break missingId;
-      }
-
-      id = R.id.header_budget;
-      TextView headerBudget = ViewBindings.findChildViewById(rootView, id);
-      if (headerBudget == null) {
-        break missingId;
-      }
-
-      id = R.id.header_id;
-      TextView headerId = ViewBindings.findChildViewById(rootView, id);
-      if (headerId == null) {
-        break missingId;
-      }
-
-      id = R.id.header_num_drinks;
-      TextView headerNumDrinks = ViewBindings.findChildViewById(rootView, id);
-      if (headerNumDrinks == null) {
-        break missingId;
-      }
-
-      id = R.id.header_steps;
-      TextView headerSteps = ViewBindings.findChildViewById(rootView, id);
-      if (headerSteps == null) {
-        break missingId;
-      }
-
-      id = R.id.integrity_status;
-      TextView integrityStatus = ViewBindings.findChildViewById(rootView, id);
-      if (integrityStatus == null) {
-        break missingId;
-      }
-
-      id = R.id.memory_size;
-      TextView memorySize = ViewBindings.findChildViewById(rootView, id);
-      if (memorySize == null) {
-        break missingId;
-      }
-
       id = R.id.raw_hex;
       EditText rawHex = ViewBindings.findChildViewById(rootView, id);
       if (rawHex == null) {
         break missingId;
       }
 
-      id = R.id.recycler_steps;
-      RecyclerView recyclerSteps = ViewBindings.findChildViewById(rootView, id);
-      if (recyclerSteps == null) {
+      id = R.id.step_layout_container;
+      LinearLayout stepLayoutContainer = ViewBindings.findChildViewById(rootView, id);
+      if (stepLayoutContainer == null) {
         break missingId;
       }
 
-      id = R.id.tag_type;
-      TextView tagType = ViewBindings.findChildViewById(rootView, id);
-      if (tagType == null) {
+      id = R.id.step_layout_title;
+      TextView stepLayoutTitle = ViewBindings.findChildViewById(rootView, id);
+      if (stepLayoutTitle == null) {
         break missingId;
       }
 
-      id = R.id.tag_uid;
-      TextView tagUid = ViewBindings.findChildViewById(rootView, id);
-      if (tagUid == null) {
+      id = R.id.tag_basic_info;
+      TextView tagBasicInfo = ViewBindings.findChildViewById(rootView, id);
+      if (tagBasicInfo == null) {
         break missingId;
       }
 
-      return new ActivityTagDetailBinding((ScrollView) rootView, btnEditRecipe, btnLoadTestRecipe,
-          btnSaveBackup, btnWriteTag, checksumStatus, headerBudget, headerId, headerNumDrinks,
-          headerSteps, integrityStatus, memorySize, rawHex, recyclerSteps, tagType, tagUid);
+      id = R.id.tag_header_title;
+      TextView tagHeaderTitle = ViewBindings.findChildViewById(rootView, id);
+      if (tagHeaderTitle == null) {
+        break missingId;
+      }
+
+      id = R.id.tag_header_values;
+      TextView tagHeaderValues = ViewBindings.findChildViewById(rootView, id);
+      if (tagHeaderValues == null) {
+        break missingId;
+      }
+
+      return new ActivityTagDetailBinding((ScrollView) rootView, btnEditRecipe, btnSaveBackup,
+          btnSet4Steps, btnWriteTag, rawHex, stepLayoutContainer, stepLayoutTitle, tagBasicInfo,
+          tagHeaderTitle, tagHeaderValues);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

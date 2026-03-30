@@ -52,11 +52,19 @@
             android:exported="false"
             android:theme="@style/Theme.NFCRecipeTag" />
         <activity
+            android:name=".ui.DebugRecipeActivity"
+            android:exported="false"
+            android:theme="@style/Theme.NFCRecipeTag" />
+        <activity
             android:name=".ui.BackupsActivity"
             android:exported="false"
             android:theme="@style/Theme.NFCRecipeTag" />
         <activity
             android:name=".ui.SettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.NFCRecipeTag" />
+        <activity
+            android:name=".ui.DebugLogActivity"
             android:exported="false"
             android:theme="@style/Theme.NFCRecipeTag" />
     </application>

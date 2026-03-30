@@ -4,6 +4,9 @@ import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.nfc.tech.MifareClassic
 import android.nfc.tech.MifareUltralight
+import com.testbed.nfcrecipetag.core.codec.HEADER_SIZE
+import com.testbed.nfcrecipetag.core.codec.NTAG213_USER_MEMORY
+import com.testbed.nfcrecipetag.core.codec.STEP_SIZE
 import com.testbed.nfcrecipetag.core.tagmodel.RawTagDump
 import com.testbed.nfcrecipetag.core.tagmodel.TagMetadata
 import com.testbed.nfcrecipetag.core.tagmodel.TagType
@@ -16,26 +19,37 @@ const val ULTRALIGHT_FIRST_PAGE = 8
 
 /**
  * For NTAG213, do not write beyond this page (config/lock area follows).
- * User memory 144 bytes = 36 pages; pages 0-3 are header, 4-39 often user; we use 8..39.
+ * User memory; pages 8..39 are safe for recipe write.
  */
 const val ULTRALIGHT_MAX_RECIPE_PAGE = 39
 
 /**
- * Logical block 0 maps to physical block 2 on Classic (firmware OFFSETDATA_CLASSIC = 1 → first data block index 2).
+ * Maximum page we will read when doing two-phase recipe read (read header, then extend to full recipe).
+ * Allows reading beyond 39 so that requiredBytes = HEADER_SIZE + recipeSteps * STEP_SIZE can be satisfied.
  */
-const val CLASSIC_FIRST_DATA_BLOCK = 2
+const val ULTRALIGHT_MAX_READ_PAGE = 55
+
+private const val CLASSIC_OFFSETDATA = 1
+
+/**
+ * Logical block 0 maps to physical block 1 on Classic (firmware OFFSETDATA_CLASSIC = 1).
+ * This mirrors the ESP32 NFC_GetMifareClassicIndex mapping so that byte 0 of the
+ * linear payload corresponds to the first byte of TRecipeInfo.
+ */
+const val CLASSIC_FIRST_DATA_BLOCK = 1
 
 /**
  * Map logical block index to physical block index (skip sector trailers: blocks 3, 7, 11, ...).
  */
 fun logicalToPhysicalClassicBlock(logicalIndex: Int): Int {
-    var physical = CLASSIC_FIRST_DATA_BLOCK
-    var remaining = logicalIndex
-    while (remaining > 0) {
-        physical++
-        if (physical % 4 != 3) remaining--
+    var number = 1 + CLASSIC_OFFSETDATA
+    repeat(logicalIndex) {
+        number++
+        if (number % 4 == 0) {
+            number++
+        }
     }
-    return physical
+    return number - 1
 }
 
 /**
@@ -69,11 +83,7 @@ fun readTagToDump(tag: Tag): RawTagDump? {
         TagType.UNKNOWN -> return null
     } ?: return null
 
-    val memorySize = when (type) {
-        TagType.ULTRALIGHT_NTAG -> 144
-        TagType.CLASSIC -> 1024
-        TagType.UNKNOWN -> 0
-    }
+    val memorySize = bytes.size
     val metadata = TagMetadata(
         uid = uid,
         uidHex = uidHex,
@@ -96,22 +106,43 @@ private fun Tag.getOrDefault(key: String, default: Short): Short {
     }
 }
 
+/**
+ * Two-phase read: first read header, parse recipeSteps, then read until
+ * currentSize >= requiredBytes. requiredBytes is capped at NTAG213_USER_MEMORY (144);
+ * we do not read beyond the NTAG213 usable region.
+ */
 private fun readUltralightBytes(tag: Tag): ByteArray? {
     MifareUltralight.get(tag)?.use { ul ->
         try {
             ul.connect()
             val chunks = mutableListOf<ByteArray>()
             var page = ULTRALIGHT_FIRST_PAGE
-            while (page <= ULTRALIGHT_MAX_RECIPE_PAGE) {
+            val bytesPerChunk = 16
+            var requiredBytes = HEADER_SIZE
+
+            while (page <= ULTRALIGHT_MAX_READ_PAGE) {
                 try {
-                    val data = ul.readPages(page)
-                    if (data != null && data.size >= 16) {
-                        chunks.add(data.copyOf(16))
-                    } else break
+                    val data = ul.readPages(page) ?: break
+                    if (data.isEmpty()) break
+
+                    if (chunks.isEmpty()) {
+                        val recipeSteps = (data.getOrNull(3)?.toInt() ?: 0) and 0xFF
+                        val requested = HEADER_SIZE + recipeSteps * STEP_SIZE
+                        requiredBytes = minOf(requested, NTAG213_USER_MEMORY)
+                    }
+
+                    val currentSize = chunks.sumOf { it.size }
+                    if (currentSize >= NTAG213_USER_MEMORY) break
+                    val remaining = (requiredBytes - currentSize).coerceAtLeast(1)
+                    val maxTake = minOf(NTAG213_USER_MEMORY - currentSize, remaining, data.size, bytesPerChunk)
+                    if (maxTake <= 0) break
+                    chunks.add(data.copyOfRange(0, maxTake))
+                    val newSize = chunks.sumOf { it.size }
+                    if (newSize >= requiredBytes || newSize >= NTAG213_USER_MEMORY) break
+                    page += 4
                 } catch (_: Exception) {
                     break
                 }
-                page += 4
             }
             val list = chunks.flatMap { it.toList() }
             return ByteArray(list.size) { list[it] }

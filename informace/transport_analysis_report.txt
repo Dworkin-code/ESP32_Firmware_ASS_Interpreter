@@ -1,0 +1,141 @@
+1. Overview
+- Firmware analyzed: `ESP32_Firmware_ASS_Interpreter/` with focus on `main/app.c`, `components/NFC_Recipes/NFC_recipes.c/.h`, `components/OPC_Klient/OPC_klient.c/.h`, `components/NFC_Reader/NFC_reader.h`, `components/NFC_Handler/NFC_handler.h`.
+- Transport handling is implemented in two parallel paths:
+  - Legacy reservation/transport state flow (`State_Poptavka_*`, `State_Rezervace`, `State_Transport`) using generic OPC methods (`Inquire`, `Reserve`, `DoProcess`, `IsFinished`).
+  - New PLC AAS flow (`USE_PLC_AAS_FLOW`) that performs `ReportProduct` + `GetSupported` + `ReserveAction` + `GetStatus` polling.
+- In current AAS decision logic, non-`ToStorageGlass` steps are routed to legacy transport/production path; `ToStorageGlass` is handled directly through AAS reserve/complete logic.
+
+2. Recipe execution flow
+- Main control loop is `State_Machine(void *pvParameter)` in `main/app.c`.
+- NFC load entry: in `State_Mimo_Polozena` it calls `NFC_Handler_LoadData(&iHandlerData)`.
+- Current step pointer: `iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep`.
+- Step data source: `iHandlerData.sWorkingCardInfo.sRecipeStep[ActualRecipeStep]` (`TRecipeStep` from `NFC_reader.h`).
+- Next step determination:
+  - Legacy: uses `tempStep.NextID` in `State_Vyroba_SpravneProvedeni` (and also in `State_Vyroba_Objeveni` when skipping transport-only step).
+  - AAS fast path: increments linearly (`ActualRecipeStep = curStep + 1`) after successful completion for `ToStorageGlass`.
+- Transition between cells detection:
+  - Legacy checks if current cell matches process target:
+    - `MyCellInfo.IDofCell != step.ProcessCellID` -> transport needed, may inject transport step (`AddRecipe(...)`) in `State_Vyroba_Objeveni`.
+  - During bidding in `State_Poptavka_Vyroba`, sets `NeedForTransport=true` when winning process cell differs from current cell.
+
+3. Process completion handling
+- Legacy completion detection:
+  - `State_Vyroba_SpravneProvedeni` calls `IsDoneReservation(...)` (wrapper over OPC `IsFinished`).
+  - Return meaning in comments: `0=not done`, `1=done ok`, `2=done wrong`.
+- On done (`case 1`) in legacy:
+  - Marks step complete: `tempStep.IsProcess=0`, `tempStep.IsStepDone=1`.
+  - If `tempStep.NextID != tempStep.ID`, sets `tempInfo.ActualRecipeStep = tempStep.NextID`.
+  - Else marks recipe done: `tempInfo.RecipeDone=1`, increments `tempInfo.NumOfDrinks`.
+  - Writes back via `NFC_Handler_WriteStep`, `NFC_Handler_WriteInfo`, `NFC_Handler_Sync`.
+- AAS completion handling (`ToStorageGlass` branch in `State_Mimo_Polozena`):
+  - Calls `OPC_ReserveAction(...)` then waits via `OPC_AAS_WaitCompletionPoll(...)`.
+  - On success: sets `step->IsStepDone=1`, advances `ActualRecipeStep`, sets `RecipeDone` if last step, writes step+info back to tag.
+  - On failure/timeout/error: sets `RecipeDone=true`, writes info, exits.
+
+4. Transport-related logic (existing)
+- Core transport step fields in `TRecipeStep` (`NFC_reader.h`):
+  - `NeedForTransport`, `TransportCellID`, `TransportCellReservationID`, `TimeOfTransport`, `IsTransport`.
+  - Related process fields: `ProcessCellID`, `ProcessCellReservationID`, `TimeOfProcess`, `IsProcess`.
+- Transport path in state machine (`main/app.c`):
+  - `State_Poptavka_Transporty`: chooses transport cell via `GetWinningCell(..., Transport, ...)`, stores `TransportCellID/ReservationID` on NFC.
+  - `State_Rezervace`: validates and reserves offers (`AskForValidOffer`, `ReserveAllOfferedReservation`).
+  - `State_Transport`: validates reservation status (`AskForValidReservation` TODO currently stub), marks transport started (`IsTransport=1`), budget decrement, triggers execution via `DoReservation(..., false)`.
+- Transport request detection/trigger conditions in `State_Mimo_Polozena`:
+  - Existing reservation IDs and flags (`TransportCellReservationID`, `ProcessCellReservationID`, `NeedForTransport`) route into reservation/transport states.
+  - Explicit transport demand path: `ProcessCellReservationID && NeedForTransport` -> `State_Poptavka_Transporty`.
+- Cell targeting:
+  - `ProcessCellID` chosen from production bid winner in `State_Poptavka_Vyroba`.
+  - `TransportCellID` chosen from transport bid winner in `State_Poptavka_Transporty`.
+
+5. OPC UA communication (relevant parts)
+- Legacy OPC methods (`components/OPC_Klient/OPC_klient.c`):
+  - `Inquire` -> method node string `"Inquire"` on ns=1.
+  - `GetInquireIsValid` -> `"IsValid"`.
+  - `Reserve` -> `"Rezervation"`.
+  - `DoReservation_klient` -> `"DoProcess"`.
+  - `IsFinished` -> `"IsFinished"`.
+  - `Occupancy` -> `"Occupancy"`.
+- PLC AAS OPC methods (ns=4 numeric IDs):
+  - Variable write: `OPC_WriteCurrentId` to `ns=4;i=6101`.
+  - `OPC_ReportProduct` / `OPC_ReportProductEx` -> method `ns=4;i=7004`.
+  - `OPC_GetSupported` -> `ns=4;i=7003`.
+  - `OPC_ReserveAction` -> `ns=4;i=7005`.
+  - `OPC_FreeFromPosition` -> `ns=4;i=7000` (defined but not used in `app.c` state flow).
+  - `OPC_GetStatus` -> `ns=4;i=7002`, used by `OPC_AAS_WaitCompletionPoll`.
+- Data sent to PLC:
+  - `WriteCurrentId`: raw UID hex string (`uidStr`).
+  - `ReportProduct`: decimal `sr_id` derived by `OPC_BuildSrIdFromUid`.
+  - `GetSupported`/`ReserveAction`: 5-field message `"sr_id/priority/material/parameterA/parameterB"` where:
+    - `material` = `TypeOfProcess`
+    - `parameterA` = `ParameterProcess1`
+    - `parameterB` = `ParameterProcess2`
+
+6. State machine (if exists)
+- Yes, explicit state machine in `State_Machine` with enum `StavovyAutomat` in `NFC_recipes.h`.
+- States:
+  - `State_Mimo_Polozena`
+  - `State_Mimo_NastaveniNaPresunDoSkladu`
+  - `State_Inicializace_Podminky`
+  - `State_Inicializace_ZiskaniAdres`
+  - `State_Poptavka_Vyroba`
+  - `State_Poptavka_Skladovani`
+  - `State_Poptavka_Transporty`
+  - `State_Poptavka_AktualniBunkaPrioritne`
+  - `State_Rezervace`
+  - `State_Transport`
+  - `State_WaitUntilRemoved`
+  - `State_Vyroba_Objeveni`
+  - `State_Vyroba_OznameniOProvedeni`
+  - `State_Vyroba_SpravneProvedeni`
+  - `State_ZmizeniZeCtecky`
+  - `State_KonecReceptu`
+  - `State_NovyRecept`
+  - `NouzovyStav`
+- Key transition summary:
+  - Tag appears -> load recipe (`State_Mimo_Polozena`).
+  - Depending on step flags/cell IDs/reservations -> address init + bidding/reservation/transport or production states.
+  - After transport execution -> `State_WaitUntilRemoved`.
+  - After process completion -> set next step or `RecipeDone`, then back to waiting for next placement.
+  - On recipe complete -> `State_KonecReceptu` then `State_NovyRecept` (demo behavior).
+
+7. Key data structures
+- `TRecipeInfo` (`NFC_reader.h`): `RecipeSteps`, `ActualRecipeStep`, `RecipeDone`, `NumOfDrinks`, budget/checksum/ID fields.
+- `TRecipeStep` (`NFC_reader.h`): process and transport addressing (`ProcessCellID`, `TransportCellID`), reservation IDs, timing (`TimeOfProcess`, `TimeOfTransport`), control flags (`NeedForTransport`, `IsTransport`, `IsProcess`, `IsStepDone`), linked progression (`NextID`).
+- `TCardInfo` (`NFC_reader.h`): holds `TRecipeInfo`, dynamic array of `TRecipeStep`, and NFC UID (`sUid`, `sUidLength`).
+- `CellInfo` (`NFC_recipes.h`): cell identity, OPC endpoint, supported process types.
+- `Reservation` (`NFC_recipes.h`): reservation/cell IDs, process type, price, time.
+- `THandlerData` (`NFC_handler.h`): dual card copies (`sIntegrityCardInfo`, `sWorkingCardInfo`) and write-index tracking for safe NFC sync.
+
+8. What is already implemented
+- Full legacy transport pipeline exists end-to-end (discover cells, inquire, reserve, start transport/process, finish checks, write-back to NFC).
+- Tag-based recipe progression with explicit per-step fields for transport/process bookkeeping is implemented.
+- AAS/PLC integration is substantial and usable:
+  - `WriteCurrentId`, `ReportProduct(Ex)`, `GetSupported`, `ReserveAction`, `GetStatus` polling.
+- Decision routing already distinguishes local AAS-handled step (`ToStorageGlass`) vs steps routed to legacy transport/production state path.
+- UID->`sr_id` conversion helper exists (`OPC_BuildSrIdFromUid`) and is already used before AAS calls.
+
+9. What is missing
+- Dedicated "RequestTransport" AAS method wrapper/call is missing (no function named `RequestTransport`; non-local steps are redirected to legacy flow).
+- `OPC_FreeFromPosition` is implemented but not integrated into state transitions.
+- Several transport-related functions are placeholders / incomplete in `NFC_recipes.c`:
+  - `AskForValidReservation` returns 0 unconditionally (`TODO`).
+  - `OcupancyCell` returns 0 unconditionally (`TODO`) even though called on card place/remove.
+- `State_Poptavka_Skladovani` and some enum states are not meaningfully implemented.
+- In `State_Transport`, conditional timing gate includes `&& false`, so schedule-based waiting is effectively disabled.
+- AAS path currently only handles `ToStorageGlass` directly; cross-cell transport via AAS contract is not yet implemented in state logic.
+
+10. Suggested integration points (where to hook transport logic)
+- Primary hook point: `State_Mimo_Polozena` AAS branch at decision point:
+  - Current code: `if (step->TypeOfProcess == ToStorageGlass) { ... AAS reserve ... } else { RAF=State_Inicializace_ZiskaniAdres; RAFnext=State_Poptavka_Vyroba; }`
+  - Integrate transport request decision here for non-local/cross-cell steps, using available step and cell context before falling back to legacy path.
+- Secondary hook: after successful process completion in `State_Vyroba_SpravneProvedeni` (where next step is decided via `NextID`) to trigger explicit transport request when next step requires different `ProcessCellID`.
+- Reservation layer hook: `State_Poptavka_Transporty` after winning transport cell assignment (`TransportCellID`, `TransportCellReservationID`) if introducing PLC-side transport call in place of legacy `DoReservation`.
+- Completion synchronization hook: `State_Transport` after `DoReservation(..., false)` and/or in `State_WaitUntilRemoved` if transport confirmation from PLC/AAS should gate next state progression.
+- Cleanup/finalization hook: add use of `OPC_FreeFromPosition` where product leaves reader/position to keep PLC model synchronized.
+
+Conclusion for transport readiness
+- Transport is not missing: it is already substantially implemented in legacy state-machine + legacy OPC method flow.
+- In AAS/PLC flow, transport is only partially prepared:
+  - Core AAS handshake exists for product report and action reserve/status.
+  - Explicit AAS transport-request orchestration for cross-cell movement is not yet wired.
+  - Therefore current state is "partially implemented" (legacy complete, AAS transport integration incomplete).

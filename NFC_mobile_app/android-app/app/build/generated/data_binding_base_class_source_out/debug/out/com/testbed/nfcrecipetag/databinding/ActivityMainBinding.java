@@ -24,6 +24,9 @@ public final class ActivityMainBinding implements ViewBinding {
   public final Button btnBackups;
 
   @NonNull
+  public final Button btnDebugLog;
+
+  @NonNull
   public final Button btnScan;
 
   @NonNull
@@ -39,10 +42,11 @@ public final class ActivityMainBinding implements ViewBinding {
   public final TextView writeStatus;
 
   private ActivityMainBinding(@NonNull ConstraintLayout rootView, @NonNull Button btnBackups,
-      @NonNull Button btnScan, @NonNull Button btnSettings, @NonNull TextView nfcStatus,
-      @NonNull TextView title, @NonNull TextView writeStatus) {
+      @NonNull Button btnDebugLog, @NonNull Button btnScan, @NonNull Button btnSettings,
+      @NonNull TextView nfcStatus, @NonNull TextView title, @NonNull TextView writeStatus) {
     this.rootView = rootView;
     this.btnBackups = btnBackups;
+    this.btnDebugLog = btnDebugLog;
     this.btnScan = btnScan;
     this.btnSettings = btnSettings;
     this.nfcStatus = nfcStatus;
@@ -83,6 +87,12 @@ public final class ActivityMainBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.btn_debug_log;
+      Button btnDebugLog = ViewBindings.findChildViewById(rootView, id);
+      if (btnDebugLog == null) {
+        break missingId;
+      }
+
       id = R.id.btn_scan;
       Button btnScan = ViewBindings.findChildViewById(rootView, id);
       if (btnScan == null) {
@@ -113,8 +123,8 @@ public final class ActivityMainBinding implements ViewBinding {
         break missingId;
       }
 
-      return new ActivityMainBinding((ConstraintLayout) rootView, btnBackups, btnScan, btnSettings,
-          nfcStatus, title, writeStatus);
+      return new ActivityMainBinding((ConstraintLayout) rootView, btnBackups, btnDebugLog, btnScan,
+          btnSettings, nfcStatus, title, writeStatus);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

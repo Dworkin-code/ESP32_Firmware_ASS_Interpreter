@@ -847,7 +847,7 @@ void OPC_AAS_WaitCompletion(uint32_t timeout_ms)
     vTaskDelay(timeout_ms / portTICK_PERIOD_MS);
 }
 
-/* Poll GetStatus until "finished", "error:XXXX", or timeout. Returns true on "finished", false on error or timeout. */
+/* Poll GetStatus until terminal success/error status, or timeout. */
 bool OPC_AAS_WaitCompletionPoll(const char *endpoint, const char *sr_id_decimal, uint32_t timeout_ms, uint32_t poll_interval_ms)
 {
     if (!endpoint || !sr_id_decimal)
@@ -866,16 +866,21 @@ bool OPC_AAS_WaitCompletionPoll(const char *endpoint, const char *sr_id_decimal,
             elapsed += poll_interval_ms;
             continue;
         }
-        if (strcmp(outBuf, "finished") == 0)
+        if ((strcmp(outBuf, "finished") == 0) ||
+            (strcmp(outBuf, "Finished") == 0) ||
+            (strcmp(outBuf, "success") == 0) ||
+            (strcmp(outBuf, "Success") == 0))
         {
-            ESP_LOGI(TAG, "OPC_AAS_WaitCompletionPoll: finished");
+            ESP_LOGI(TAG, "OPC_AAS_WaitCompletionPoll: %s", outBuf);
             return true;
         }
-        if (strncmp(outBuf, "error:", 6) == 0)
+        if ((strncmp(outBuf, "error:", 6) == 0) ||
+            (strncmp(outBuf, "Error:", 6) == 0))
         {
             ESP_LOGE(TAG, "OPC_AAS_WaitCompletionPoll: %s", outBuf);
             return false;
         }
+        ESP_LOGD(TAG, "OPC_AAS_WaitCompletionPoll: non-terminal status=%s", outBuf);
         vTaskDelay(poll_interval_ms / portTICK_PERIOD_MS);
         elapsed += poll_interval_ms;
     }

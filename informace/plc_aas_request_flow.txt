@@ -1,0 +1,95 @@
+PLC AAS REQUEST FLOW (current implementation)
+=============================================
+
+0) Context
+- OPC UA methods are exposed by PLCServiceProvider NodeSet (PLCSeviceProvider.xml).
+- Method calls are mapped to FB instances in Active AAS_DB.
+- Runtime service execution is managed separately in Passive_AAS.
+
+1) OPC UA method invocation
+- Client calls one of:
+  FreeFromPosition / FreeFromQueue / GetStatus / GetSupported / ReportProduct / ReserveAction
+- Client passes one input argument: InputMessage (UA String).
+
+2) Method pre-processing
+- FB executes OPC_UA_ServerMethodPre.
+- Pre block returns UAMethod_Called and status flags (done/busy/error/status).
+- If UAMethod_Called = FALSE, method body does nothing this cycle.
+
+3) Input decoding
+- InputMessage is stored in method struct as WString.
+- Code converts WString to String (WSTRING_TO_STRING).
+- GetMessage() splits input by "/" into element[0..WordNumberSpaces].
+- Methods use fixed token positions:
+  - ReserveAction: 0=id,1=priority,2=material,3=initial/op,4=final/opParam
+  - GetSupported: 1=priority bucket,2=material,3=initial/op,4=final/opParam
+  - GetStatus/ReportProduct/FreeFromQueue/FreeFromPosition: token 0
+
+4) Method-specific handling
+
+4.1) ReserveAction
+- Validate id != 0.
+- PQueue_find(id) checks duplicate reservation.
+- Compute support score from SupportMaterial/SupportA/SupportB ranges.
+- If support is 0 -> ErrItemNotSupported.
+- Else PQueue_push(item, priority) inserts into priority queue.
+- OutputMessage := Success OR Error string.
+
+4.2) GetSupported
+- Compute support score from same Support* ranges.
+- Compute queue position estimate from PQueue.subElementCount sum.
+- OutputMessage := "support:<value>_position:<value>".
+
+4.3) GetStatus
+- Validate id != 0.
+- PQueue_find(id).
+- If found at activeItemPosition -> "inProgress".
+- If found elsewhere -> "position:<n>".
+- Else -> Error string.
+
+4.4) ReportProduct
+- Validate id != 0.
+- Queue_find() in RPQueue detects duplicates.
+- Queue_push() inserts reported product.
+- OutputMessage := Success OR Error string.
+
+4.5) FreeFromQueue
+- Validate id != 0.
+- PQueue_find(id).
+- If id is active item -> PQErrItemAlreadyInProgress.
+- Else PQueue_removeByPosition(position).
+- OutputMessage := Success OR Error string.
+
+4.6) FreeFromPosition
+- Compare token[0] with PassiveAAS_DB.OutputPositionSr.
+- If equal -> OutputPositionSr := "0", OutputMessage := Success.
+- Else -> OutputMessage := Error (PErrItemNotInPosition as hex text).
+
+5) Method completion
+- For all methods:
+  UAMethod_Result := OpcUa_Good
+  UAMethod_Finished := TRUE
+- FB executes OPC_UA_ServerMethodPost.
+- Post block publishes OutputMessage and post status flags.
+
+6) Asynchronous passive execution loop (outside one method call)
+- Passive_AAS cycle:
+  a) If deviceRunning then CheckAction tries to match queued item with reported-product queue.
+  b) DeviceSlow executes handshake state machine (SetReady -> Start -> Done -> ResetDone path).
+  c) Falling edge of deviceRunning triggers RemoveFinishedProduct (remove from RPQueue and PQueue, update history).
+  d) Publish CurrentId, CurrentIdPosition, ItemCountP, ItemCountRP, QueueStatus.
+
+7) External machine handshake interface
+- DeviceSlow reads statuses: StsIdle/StsReady/StsBusy/StsDone/StsError.
+- DeviceSlow outputs commands: CmdSetReady/CmdStart/CmdResetDone/CmdProductID.
+- CommBlock DB defines equivalent fields Idle/Ready/Busy/Done/Error and SetReady/Start/ResetDone and ProductID.
+
+8) Error/result signaling pattern
+- Application-level result is encoded in OutputMessage text:
+  Success / inProgress / position:<n> / support:<v>_position:<p> / Error:<hex> / Error1:<hex>_Error2:<hex>.
+- OPC UA method result code itself is set to OpcUa_Good even when OutputMessage reports a business error.
+
+9) Not confirmed from code/project files
+- Exact numeric values of constants (PQErr*, PErr*, Support* bounds, QueueCountSmall, SubQueueCount, WordNumberSpaces).
+- Exact OB/call hierarchy wiring of these FBs in the complete PLC runtime project.
+- Exact physical binding/wiring to machine IO or communication stack beyond CommBlock field definitions.

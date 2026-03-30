@@ -24,15 +24,38 @@ public final class ActivityWriteTagBinding implements ViewBinding {
   public final Button btnConfirmWrite;
 
   @NonNull
+  public final TextView writeCapacity;
+
+  @NonNull
+  public final TextView writeCapacityWarning;
+
+  @NonNull
+  public final TextView writeIdentityDebug;
+
+  @NonNull
+  public final TextView writeIdentityWarning;
+
+  @NonNull
+  public final TextView writePreview;
+
+  @NonNull
   public final TextView writeResult;
 
   @NonNull
   public final TextView writeSummary;
 
   private ActivityWriteTagBinding(@NonNull ScrollView rootView, @NonNull Button btnConfirmWrite,
-      @NonNull TextView writeResult, @NonNull TextView writeSummary) {
+      @NonNull TextView writeCapacity, @NonNull TextView writeCapacityWarning,
+      @NonNull TextView writeIdentityDebug, @NonNull TextView writeIdentityWarning,
+      @NonNull TextView writePreview, @NonNull TextView writeResult,
+      @NonNull TextView writeSummary) {
     this.rootView = rootView;
     this.btnConfirmWrite = btnConfirmWrite;
+    this.writeCapacity = writeCapacity;
+    this.writeCapacityWarning = writeCapacityWarning;
+    this.writeIdentityDebug = writeIdentityDebug;
+    this.writeIdentityWarning = writeIdentityWarning;
+    this.writePreview = writePreview;
     this.writeResult = writeResult;
     this.writeSummary = writeSummary;
   }
@@ -70,6 +93,36 @@ public final class ActivityWriteTagBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.write_capacity;
+      TextView writeCapacity = ViewBindings.findChildViewById(rootView, id);
+      if (writeCapacity == null) {
+        break missingId;
+      }
+
+      id = R.id.write_capacity_warning;
+      TextView writeCapacityWarning = ViewBindings.findChildViewById(rootView, id);
+      if (writeCapacityWarning == null) {
+        break missingId;
+      }
+
+      id = R.id.write_identity_debug;
+      TextView writeIdentityDebug = ViewBindings.findChildViewById(rootView, id);
+      if (writeIdentityDebug == null) {
+        break missingId;
+      }
+
+      id = R.id.write_identity_warning;
+      TextView writeIdentityWarning = ViewBindings.findChildViewById(rootView, id);
+      if (writeIdentityWarning == null) {
+        break missingId;
+      }
+
+      id = R.id.write_preview;
+      TextView writePreview = ViewBindings.findChildViewById(rootView, id);
+      if (writePreview == null) {
+        break missingId;
+      }
+
       id = R.id.write_result;
       TextView writeResult = ViewBindings.findChildViewById(rootView, id);
       if (writeResult == null) {
@@ -82,7 +135,8 @@ public final class ActivityWriteTagBinding implements ViewBinding {
         break missingId;
       }
 
-      return new ActivityWriteTagBinding((ScrollView) rootView, btnConfirmWrite, writeResult,
+      return new ActivityWriteTagBinding((ScrollView) rootView, btnConfirmWrite, writeCapacity,
+          writeCapacityWarning, writeIdentityDebug, writeIdentityWarning, writePreview, writeResult,
           writeSummary);
     }
     String missingId = rootView.getResources().getResourceName(id);

@@ -24,6 +24,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnScan.setOnClickListener { startActivity(Intent(this, ScanActivity::class.java)) }
         binding.btnBackups.setOnClickListener { startActivity(Intent(this, BackupsActivity::class.java)) }
         binding.btnSettings.setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
+        binding.btnDebugLog.setOnClickListener { startActivity(Intent(this, DebugLogActivity::class.java)) }
         handleIntent(intent)
     }
 
@@ -58,7 +59,7 @@ class MainActivity : AppCompatActivity() {
             if (tag != null) {
                 val dump = com.testbed.nfcrecipetag.core.nfc.readTagToDump(tag)
                 if (dump != null) {
-                    TagDetailActivity.start(this, dump)
+                    TagDetailActivity.startFromMainNfcIntent(this, dump)
                 } else {
                     Toast.makeText(this, "Unsupported tag type", Toast.LENGTH_SHORT).show()
                 }

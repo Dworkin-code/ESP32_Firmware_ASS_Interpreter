@@ -2,10 +2,12 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "NFC_reader.h"
 #include "pn532.h"
 #include "esp_system.h"
+#include "esp_log.h"
 
 #define OFFSETDATA_ULTRALIGHT 8 // Offset paměti na mifare ultralight NFC tagu
 #define OFFSETDATA_CLASSIC 1    // Offset paměti na mifare classic NFC tagu
@@ -70,6 +72,130 @@ Možnost tisknout nazev
 */
 #define _STRINGIFY(s) #s
 #define STRINGIFY(s) _STRINGIFY(s)
+
+static uint8_t NFC_Reader_GetWriteCheckOuterRetries(const TCardInfo *aCardInfo)
+{
+  if ((aCardInfo != NULL) && (aCardInfo->sUidLength == 7U))
+  {
+    return 1U;
+  }
+  return MAXERRORREADING;
+}
+
+typedef enum
+{
+  NFC_VERIFY_MISMATCH_NONE = 0,
+  NFC_VERIFY_MISMATCH_INFO = 1,
+  NFC_VERIFY_MISMATCH_STEP = 2
+} nfc_verify_mismatch_kind_t;
+
+typedef struct
+{
+  bool valid;
+  nfc_verify_mismatch_kind_t kind;
+  uint16_t rangeStart;
+  uint16_t rangeEnd;
+  uint16_t structureIndex;
+  uint16_t byteIndex;
+  uint8_t expectedByte;
+  uint8_t actualByte;
+  uint8_t expectedRecipeSteps;
+  uint8_t actualRecipeSteps;
+  uint16_t expectedCheckSum;
+  uint16_t actualCheckSum;
+  bool mismatchInCheckSum;
+  uint16_t stepIndex;
+  uint16_t stepByteIndex;
+} nfc_verify_mismatch_info_t;
+
+static nfc_verify_mismatch_info_t s_verifyMismatchInfo;
+
+static void NFC_VerifyMismatch_Reset(void)
+{
+  memset(&s_verifyMismatchInfo, 0, sizeof(s_verifyMismatchInfo));
+}
+
+static void NFC_VerifyMismatch_SetInfo(uint16_t rangeStart, uint16_t rangeEnd,
+                                       uint16_t structureIndex, uint16_t byteIndex,
+                                       uint8_t expectedByte, uint8_t actualByte,
+                                       uint8_t expectedRecipeSteps, uint8_t actualRecipeSteps,
+                                       uint16_t expectedCheckSum, uint16_t actualCheckSum,
+                                       bool mismatchInCheckSum)
+{
+  if (s_verifyMismatchInfo.valid)
+    return;
+  s_verifyMismatchInfo.valid = true;
+  s_verifyMismatchInfo.kind = NFC_VERIFY_MISMATCH_INFO;
+  s_verifyMismatchInfo.rangeStart = rangeStart;
+  s_verifyMismatchInfo.rangeEnd = rangeEnd;
+  s_verifyMismatchInfo.structureIndex = structureIndex;
+  s_verifyMismatchInfo.byteIndex = byteIndex;
+  s_verifyMismatchInfo.expectedByte = expectedByte;
+  s_verifyMismatchInfo.actualByte = actualByte;
+  s_verifyMismatchInfo.expectedRecipeSteps = expectedRecipeSteps;
+  s_verifyMismatchInfo.actualRecipeSteps = actualRecipeSteps;
+  s_verifyMismatchInfo.expectedCheckSum = expectedCheckSum;
+  s_verifyMismatchInfo.actualCheckSum = actualCheckSum;
+  s_verifyMismatchInfo.mismatchInCheckSum = mismatchInCheckSum;
+}
+
+static void NFC_VerifyMismatch_SetStep(uint16_t rangeStart, uint16_t rangeEnd,
+                                       uint16_t structureIndex, uint16_t stepIndex,
+                                       uint16_t stepByteIndex, uint8_t expectedByte, uint8_t actualByte)
+{
+  if (s_verifyMismatchInfo.valid)
+    return;
+  s_verifyMismatchInfo.valid = true;
+  s_verifyMismatchInfo.kind = NFC_VERIFY_MISMATCH_STEP;
+  s_verifyMismatchInfo.rangeStart = rangeStart;
+  s_verifyMismatchInfo.rangeEnd = rangeEnd;
+  s_verifyMismatchInfo.structureIndex = structureIndex;
+  s_verifyMismatchInfo.stepIndex = stepIndex;
+  s_verifyMismatchInfo.stepByteIndex = stepByteIndex;
+  s_verifyMismatchInfo.expectedByte = expectedByte;
+  s_verifyMismatchInfo.actualByte = actualByte;
+}
+
+static void NFC_VerifyMismatch_Print(const char *compareFn)
+{
+  if (!s_verifyMismatchInfo.valid)
+  {
+    printf("[NFC_VERIFY_MISMATCH] compareFn=%s range=%u-%u detail=not-captured\n",
+           compareFn ? compareFn : "(null)",
+           (unsigned)s_verifyMismatchInfo.rangeStart,
+           (unsigned)s_verifyMismatchInfo.rangeEnd);
+    return;
+  }
+
+  if (s_verifyMismatchInfo.kind == NFC_VERIFY_MISMATCH_INFO)
+  {
+    printf("[NFC_VERIFY_MISMATCH] compareFn=%s range=%u-%u struct=%u firstMismatchIndex=%u expectedByte=%u actualByte=%u\n",
+           compareFn ? compareFn : "(null)",
+           (unsigned)s_verifyMismatchInfo.rangeStart,
+           (unsigned)s_verifyMismatchInfo.rangeEnd,
+           (unsigned)s_verifyMismatchInfo.structureIndex,
+           (unsigned)s_verifyMismatchInfo.byteIndex,
+           (unsigned)s_verifyMismatchInfo.expectedByte,
+           (unsigned)s_verifyMismatchInfo.actualByte);
+    printf("[NFC_VERIFY_MISMATCH] expectedRecipeSteps=%u actualRecipeSteps=%u expectedCheckSum=%u actualCheckSum=%u mismatchInCheckSum=%u\n",
+           (unsigned)s_verifyMismatchInfo.expectedRecipeSteps,
+           (unsigned)s_verifyMismatchInfo.actualRecipeSteps,
+           (unsigned)s_verifyMismatchInfo.expectedCheckSum,
+           (unsigned)s_verifyMismatchInfo.actualCheckSum,
+           (unsigned)s_verifyMismatchInfo.mismatchInCheckSum);
+    return;
+  }
+
+  printf("[NFC_VERIFY_MISMATCH] compareFn=%s range=%u-%u struct=%u stepIndex=%u stepByteIndex=%u expectedByte=%u actualByte=%u\n",
+         compareFn ? compareFn : "(null)",
+         (unsigned)s_verifyMismatchInfo.rangeStart,
+         (unsigned)s_verifyMismatchInfo.rangeEnd,
+         (unsigned)s_verifyMismatchInfo.structureIndex,
+         (unsigned)s_verifyMismatchInfo.stepIndex,
+         (unsigned)s_verifyMismatchInfo.stepByteIndex,
+         (unsigned)s_verifyMismatchInfo.expectedByte,
+         (unsigned)s_verifyMismatchInfo.actualByte);
+}
 
  /**************************************************************************/
 /*!
@@ -197,6 +323,7 @@ uint8_t NFC_WriteStruct(pn532_t *aNFC, TCardInfo *aCardInfo, uint16_t NumOfStruc
 uint8_t NFC_WriteStructRange(pn532_t *aNFC, TCardInfo *aCardInfo, uint16_t NumOfStructureStart, uint16_t NumOfStructureEnd)
 {
   static const char *TAGin = "NFC_WriteStructRange";
+  uint32_t ws_start_ms = esp_log_timestamp();
   NFC_READER_DEBUG(TAGin, "Zapisuji na kartu\n");
   tNeopixel Svetlo = { Pozice, NP_RGB(SvetloR, SvetloG,  SvetloB) };
   neopixel_SetPixel(*Light,&Svetlo,1);
@@ -231,7 +358,15 @@ uint8_t NFC_WriteStructRange(pn532_t *aNFC, TCardInfo *aCardInfo, uint16_t NumOf
     konec = TRecipeInfo_Size + (NumOfStructureStart - 1) * TRecipeStep_Size + TRecipeStep_Size * (NumOfStructureEnd - NumOfStructureStart + 1) - 1;
   }
 
+  uint16_t CheckSumOld = aCardInfo->sRecipeInfo.CheckSum;
+  NFC_READER_ALL_DEBUG(TAGin,
+                       "DBG checksum precompute range=%u-%u RecipeSteps=%u oldCheckSum=%u\n",
+                       (unsigned)NumOfStructureStart,
+                       (unsigned)NumOfStructureEnd,
+                       (unsigned)aCardInfo->sRecipeInfo.RecipeSteps,
+                       (unsigned)CheckSumOld);
   uint16_t CheckSumNew = NFC_GetCheckSum(*aCardInfo);
+  NFC_READER_ALL_DEBUG(TAGin, "DBG checksum computed newCheckSum=%u\n", (unsigned)CheckSumNew);
   if (CheckSumNew != aCardInfo->sRecipeInfo.CheckSum)
   {
     aCardInfo->sRecipeInfo.CheckSum = CheckSumNew;
@@ -250,8 +385,15 @@ uint8_t NFC_WriteStructRange(pn532_t *aNFC, TCardInfo *aCardInfo, uint16_t NumOf
   NFC_READER_ALL_DEBUG(TAGin, "Zacatek zapisu: %d, Konec: %d\n", zacatek, konec);
 
   uint8_t iuid[] = {0, 0, 0, 0, 0, 0, 0}; // Buffer to store the returned UID
-  uint8_t iuidLength;
+  uint8_t iuidLength = 0;
+  printf("[NFC_TIMING][%s] readPassiveTargetID start timeout=%u range=%u-%u t=%lldms\n",
+         TAGin, (unsigned)MAXTIMEOUT, (unsigned)NumOfStructureStart, (unsigned)NumOfStructureEnd, (long long)esp_log_timestamp());
+  uint32_t read_start_ms = esp_log_timestamp();
   uint8_t PrilozenaKarta = pn532_readPassiveTargetID(aNFC, PN532_MIFARE_ISO14443A, iuid, &iuidLength, MAXTIMEOUT);
+  uint32_t read_end_ms = esp_log_timestamp();
+  printf("[NFC_TIMING][%s] readPassiveTargetID end ret=%u uidLen=%u dt=%lldms t=%lldms\n",
+         TAGin, (unsigned)PrilozenaKarta, (unsigned)iuidLength,
+         (long long)(read_end_ms - read_start_ms), (long long)read_end_ms);
   if (PrilozenaKarta == 1)
   {
     // NFC MIFARE CLASSIC
@@ -297,6 +439,32 @@ uint8_t NFC_WriteStructRange(pn532_t *aNFC, TCardInfo *aCardInfo, uint16_t NumOf
           NFC_READER_ALL_DEBUG("", "data: %d na index: %d\n", i, index);
           uint8_t Zapsano = pn532_mifareclassic_WriteDataBlock(aNFC, index, iData);
           NFC_READER_ALL_DEBUG("", "Navratova hodnota: %d\n", Zapsano);
+          if (!Zapsano)
+          {
+            NFC_READER_ALL_DEBUG(TAGin, "LOWLEVEL WRITE FAIL medium=Classic block=%d chunk_i=%d\n", (int)index, i);
+            Svetlo.rgb = NP_RGB(0, 0,  0);
+            neopixel_SetPixel(*Light,&Svetlo,1);
+            return 2;
+          }
+          uint8_t readBackData[PAGESIZE_CLASSIC];
+          uint8_t readBackOk = pn532_mifareclassic_ReadDataBlock(aNFC, index, readBackData);
+          if (!readBackOk)
+          {
+            NFC_READER_ALL_DEBUG(TAGin, "IMMEDIATE READBACK FAIL medium=Classic block=%d chunk_i=%d\n", (int)index, i);
+          }
+          else
+          {
+            for (size_t rb = 0; rb < PAGESIZE_CLASSIC; ++rb)
+            {
+              if (readBackData[rb] != iData[rb])
+              {
+                NFC_READER_ALL_DEBUG(TAGin,
+                                     "IMMEDIATE READBACK MISMATCH medium=Classic block=%d byte_offset=%d expected=0x%02X actual=0x%02X\n",
+                                     (int)index, (int)rb, (unsigned)iData[rb], (unsigned)readBackData[rb]);
+              }
+            }
+          }
+          NFC_READER_ALL_DEBUG(TAGin, "LOWLEVEL WRITE OK medium=Classic block=%d chunk_i=%d\n", (int)index, i);
         }
         else
         {
@@ -337,7 +505,32 @@ uint8_t NFC_WriteStructRange(pn532_t *aNFC, TCardInfo *aCardInfo, uint16_t NumOf
         }
         NFC_READER_ALL_DEBUG("", "\n");
         uint8_t Zapsano = pn532_mifareultralight_WritePage(aNFC, i + OFFSETDATA_ULTRALIGHT, iData);
-        NFC_READER_ALL_DEBUG(TAGin, "Zapsano na %d stranu\n", i + OFFSETDATA_ULTRALIGHT);
+        if (!Zapsano)
+        {
+          NFC_READER_ALL_DEBUG(TAGin, "LOWLEVEL WRITE FAIL medium=Ultralight page=%d chunk_i=%d\n", i + OFFSETDATA_ULTRALIGHT, i);
+          Svetlo.rgb = NP_RGB(0, 0,  0);
+          neopixel_SetPixel(*Light,&Svetlo,1);
+          return 2;
+        }
+        uint8_t readBackData[PAGESIZE_CLASSIC];
+        uint8_t readBackOk = pn532_mifareultralight_ReadPage(aNFC, i + OFFSETDATA_ULTRALIGHT, readBackData);
+        if (!readBackOk)
+        {
+          NFC_READER_ALL_DEBUG(TAGin, "IMMEDIATE READBACK FAIL medium=Ultralight page=%d chunk_i=%d\n", i + OFFSETDATA_ULTRALIGHT, i);
+        }
+        else
+        {
+          for (size_t rb = 0; rb < PAGESIZE_ULTRALIGHT; ++rb)
+          {
+            if (readBackData[rb] != iData[rb])
+            {
+              NFC_READER_ALL_DEBUG(TAGin,
+                                   "IMMEDIATE READBACK MISMATCH medium=Ultralight page=%d byte_offset=%d expected=0x%02X actual=0x%02X\n",
+                                   i + OFFSETDATA_ULTRALIGHT, (int)rb, (unsigned)iData[rb], (unsigned)readBackData[rb]);
+            }
+          }
+        }
+        NFC_READER_ALL_DEBUG(TAGin, "LOWLEVEL WRITE OK medium=Ultralight page=%d chunk_i=%d\n", i + OFFSETDATA_ULTRALIGHT, i);
       }
     }
 
@@ -354,6 +547,7 @@ uint8_t NFC_WriteStructRange(pn532_t *aNFC, TCardInfo *aCardInfo, uint16_t NumOf
   }
   Svetlo.rgb = NP_RGB(0, 0,  0);
   neopixel_SetPixel(*Light,&Svetlo,1);
+  printf("[NFC_TIMING][%s] exit res=0 dt_total=%ums\n", TAGin, (unsigned)(esp_log_timestamp() - ws_start_ms));
   return 0;
 }
 
@@ -548,8 +742,11 @@ uint8_t NFC_LoadTRecipeInfoStructure(pn532_t *aNFC, TCardInfo *aCardInfo)
 {
   static const char *TAGin = "NFC_LoadTRecipeInfoStructure";
   NFC_READER_DEBUG(TAGin, "Nacitam strukturu TRecipeInfo.\n");
+  memset(&aCardInfo->sRecipeInfo, 0, sizeof(aCardInfo->sRecipeInfo));
+  aCardInfo->TRecipeInfoLoaded = false;
   uint8_t iuid[] = {0, 0, 0, 0, 0, 0, 0}; // Buffer to store the returned UID
   uint8_t iuidLength;
+  size_t bytesLoaded = 0;
   tNeopixel Svetlo = { Pozice, NP_RGB(SvetloG, SvetloR,  SvetloB) };
   neopixel_SetPixel(*Light,&Svetlo,1);
   uint8_t PrilozenaKarta = pn532_readPassiveTargetID(aNFC, PN532_MIFARE_ISO14443A, iuid, &iuidLength, MAXTIMEOUT);
@@ -588,6 +785,7 @@ uint8_t NFC_LoadTRecipeInfoStructure(pn532_t *aNFC, TCardInfo *aCardInfo)
               {
 
                 *(((uint8_t *)&aCardInfo->sRecipeInfo) + k + i * PAGESIZE_CLASSIC) = iData[k];
+                bytesLoaded++;
                 // NFC_READER_ALL_DEBUG("", "%d: %d, ", k, *(((uint8_t *)&aCardInfo->sRecipeInfo) + k + i * PAGESIZE_CLASSIC));
               }
               else
@@ -636,6 +834,7 @@ uint8_t NFC_LoadTRecipeInfoStructure(pn532_t *aNFC, TCardInfo *aCardInfo)
             if (k + i * 16 < TRecipeInfo_Size)
             {
               *(((uint8_t *)&aCardInfo->sRecipeInfo) + k + i * 16) = iData[k];
+              bytesLoaded++;
               // NFC_READER_ALL_DEBUG("", "%d: %d, ", k, *(((uint8_t *)&aCardInfo->sRecipeInfo) + k + i * 16));
             }
             else
@@ -655,19 +854,32 @@ uint8_t NFC_LoadTRecipeInfoStructure(pn532_t *aNFC, TCardInfo *aCardInfo)
     }
     else
     {
-      NFC_READER_DEBUG(TAGin, "Na kartu z karty precist hodnoty\n");
+      NFC_READER_DEBUG(TAGin, "Unsupported UID length: %d\n", iuidLength);
+      NFC_READER_DEBUG(TAGin, "Read failure while loading TRecipeInfo.\n");
+      Svetlo.rgb = 0;
+      neopixel_SetPixel(*Light,&Svetlo,1);
+      return 2;
     }
   }
   else
   {
     NFC_READER_DEBUG(TAGin, "Karta nebyla prilozena.\n");
+    NFC_READER_DEBUG(TAGin, "Read failure while loading TRecipeInfo.\n");
     Svetlo.rgb = 0;
             neopixel_SetPixel(*Light,&Svetlo,1);
+    return 2;
+  }
+  if (bytesLoaded != TRecipeInfo_Size)
+  {
+    NFC_READER_DEBUG(TAGin, "Read failure while loading TRecipeInfo.\n");
+    Svetlo.rgb = 0;
+    neopixel_SetPixel(*Light,&Svetlo,1);
     return 2;
   }
   /* AAS fix: persist UID into TCardInfo so sr_id and ReportProduct use real tag identity */
   NFC_saveUID(aCardInfo, iuid, iuidLength);
   aCardInfo->TRecipeInfoLoaded = true;
+  NFC_READER_DEBUG(TAGin, "TRecipeInfo fully loaded (%d bytes).\n", TRecipeInfo_Size);
   Svetlo.rgb = 0;
             neopixel_SetPixel(*Light,&Svetlo,1);
   return 0;
@@ -1288,7 +1500,29 @@ uint8_t NFC_CheckStructArrayIsSame(pn532_t *aNFC, TCardInfo *aCardInfo, uint16_t
       {
         if (*(((uint8_t *)&aCardInfo->sRecipeInfo) + j) != *(((uint8_t *)&idataNFC1.sRecipeInfo) + j))
         {
+          uint8_t expectedByte = *(((uint8_t *)&aCardInfo->sRecipeInfo) + j);
+          uint8_t actualByte = *(((uint8_t *)&idataNFC1.sRecipeInfo) + j);
+          size_t checkSumOffset = (size_t)((uint8_t *)&aCardInfo->sRecipeInfo.CheckSum - (uint8_t *)&aCardInfo->sRecipeInfo);
+          bool mismatchInCheckSum = (j >= (int)checkSumOffset) &&
+                                    (j < (int)(checkSumOffset + sizeof(aCardInfo->sRecipeInfo.CheckSum)));
+          NFC_VerifyMismatch_SetInfo(NumOfStructureStart, NumOfStructureEnd, i, j,
+                                     expectedByte, actualByte,
+                                     aCardInfo->sRecipeInfo.RecipeSteps,
+                                     idataNFC1.sRecipeInfo.RecipeSteps,
+                                     aCardInfo->sRecipeInfo.CheckSum,
+                                     idataNFC1.sRecipeInfo.CheckSum,
+                                     mismatchInCheckSum);
           NFC_READER_ALL_DEBUG(TAGin, "Struktura %d na pozici %d jsou rozdilne.\n", i, j);
+          NFC_READER_ALL_DEBUG(TAGin,
+                               "DBG info mismatch j=%d expectedByte=%u actualByte=%u expectedRecipeSteps=%u actualRecipeSteps=%u expectedCheckSum=%u actualCheckSum=%u mismatchInCheckSum=%u\n",
+                               j,
+                               (unsigned)expectedByte,
+                               (unsigned)actualByte,
+                               (unsigned)aCardInfo->sRecipeInfo.RecipeSteps,
+                               (unsigned)idataNFC1.sRecipeInfo.RecipeSteps,
+                               (unsigned)aCardInfo->sRecipeInfo.CheckSum,
+                               (unsigned)idataNFC1.sRecipeInfo.CheckSum,
+                               (unsigned)mismatchInCheckSum);
           if (idataNFC1.TRecipeStepArrayCreated == true)
             NFC_DeAllocTRecipeStepArray(&idataNFC1);
           return 1;
@@ -1318,6 +1552,9 @@ uint8_t NFC_CheckStructArrayIsSame(pn532_t *aNFC, TCardInfo *aCardInfo, uint16_t
       {
         if (*(((uint8_t *)aCardInfo->sRecipeStep) + j + (i - 1) * TRecipeStep_Size) != *(((uint8_t *)idataNFC1.sRecipeStep) + j + (i - 1) * TRecipeStep_Size))
         {
+          uint8_t expectedByte = *(((uint8_t *)aCardInfo->sRecipeStep) + j + (i - 1) * TRecipeStep_Size);
+          uint8_t actualByte = *(((uint8_t *)idataNFC1.sRecipeStep) + j + (i - 1) * TRecipeStep_Size);
+          NFC_VerifyMismatch_SetStep(NumOfStructureStart, NumOfStructureEnd, i, (uint16_t)(i - 1), (uint16_t)j, expectedByte, actualByte);
           NFC_READER_ALL_DEBUG(TAGin, "Struktura %d na pozici %d jsou rozdílne.\n", i, j);
           NFC_DeAllocTRecipeStepArray(&idataNFC1);
           return 1;
@@ -1349,13 +1586,23 @@ uint8_t NFC_CheckStructArrayIsSame(pn532_t *aNFC, TCardInfo *aCardInfo, uint16_t
 uint8_t NFC_WriteCheck(pn532_t *aNFC, TCardInfo *aCardInfo, uint16_t NumOfStructureStart, uint16_t NumOfStructureEnd)
 {
   static const char *TAGin = "NFC_WriteCheck";
+  uint32_t wc_start_ms = esp_log_timestamp();
+  uint8_t outerRetryCount = NFC_Reader_GetWriteCheckOuterRetries(aCardInfo);
   NFC_READER_DEBUG(TAGin, "Zapisuji hodnoty a kontroluji jestli jsou stejne od %d do %d.\n", NumOfStructureStart, NumOfStructureEnd);
+  printf("[NFC_TIMING][%s] enter range=%u-%u t=%lldms\n",
+         TAGin, (unsigned)NumOfStructureStart, (unsigned)NumOfStructureEnd, (long long)wc_start_ms);
+  NFC_VerifyMismatch_Reset();
   uint8_t Error = 0;
-  for (int k = 0; k < MAXERRORREADING; ++k)
+  for (int k = 0; k < outerRetryCount; ++k)
   {
     for (int i = 0; i < MAXERRORREADING; ++i)
     {
+      uint32_t wr_start_ms = esp_log_timestamp();
+      printf("[NFC_TIMING][%s] write outer=%d inner=%d start t=%lldms\n", TAGin, k, i, (long long)wr_start_ms);
       Error = NFC_WriteStructRange(aNFC, aCardInfo, NumOfStructureStart, NumOfStructureEnd);
+      uint32_t wr_end_ms = esp_log_timestamp();
+      printf("[NFC_TIMING][%s] write outer=%d inner=%d end res=%u dt=%lldms t=%lldms\n",
+             TAGin, k, i, (unsigned)Error, (long long)(wr_end_ms - wr_start_ms), (long long)wr_end_ms);
       if (Error == 0)
       {
         break;
@@ -1387,7 +1634,12 @@ uint8_t NFC_WriteCheck(pn532_t *aNFC, TCardInfo *aCardInfo, uint16_t NumOfStruct
     }
     for (int i = 0; i < MAXERRORREADING; ++i)
     {
+      uint32_t vc_start_ms = esp_log_timestamp();
+      printf("[NFC_TIMING][%s] verify outer=%d inner=%d start t=%lldms\n", TAGin, k, i, (long long)vc_start_ms);
       Error = NFC_CheckStructArrayIsSame(aNFC, aCardInfo, NumOfStructureStart, NumOfStructureEnd);
+      uint32_t vc_end_ms = esp_log_timestamp();
+      printf("[NFC_TIMING][%s] verify outer=%d inner=%d end res=%u dt=%lldms t=%lldms\n",
+             TAGin, k, i, (unsigned)Error, (long long)(vc_end_ms - vc_start_ms), (long long)vc_end_ms);
       if (Error <= 1)
       {
         break;
@@ -1397,6 +1649,7 @@ uint8_t NFC_WriteCheck(pn532_t *aNFC, TCardInfo *aCardInfo, uint16_t NumOfStruct
     {
     case 0:
       NFC_READER_DEBUG(TAGin, "Data se zapsala správne.\n");
+      printf("[NFC_TIMING][%s] exit res=0 dt_total=%ums\n", TAGin, (unsigned)(esp_log_timestamp() - wc_start_ms));
       return 0;
     case 1:
       NFC_READER_DEBUG(TAGin, "Data se nezapsala spravne, zkusim znovu.\n");
@@ -1426,7 +1679,10 @@ uint8_t NFC_WriteCheck(pn532_t *aNFC, TCardInfo *aCardInfo, uint16_t NumOfStruct
       break;
     }
   }
-  NFC_READER_DEBUG(TAGin, "Data se nezapsala spravne ani po 5 pokusech.\n");
+  NFC_READER_DEBUG(TAGin, "Data se nezapsala spravne ani po %u pokusech.\n", (unsigned)outerRetryCount);
+  NFC_VerifyMismatch_Print("NFC_CheckStructArrayIsSame");
+  fflush(stdout);
+  printf("[NFC_TIMING][%s] exit res=1 dt_total=%ums\n", TAGin, (unsigned)(esp_log_timestamp() - wc_start_ms));
   return 1;
 }
 

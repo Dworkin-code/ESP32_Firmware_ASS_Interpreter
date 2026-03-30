@@ -5,6 +5,17 @@
     android:orientation="vertical"
     android:padding="16dp">
 
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/cell_profile" />
+    <Spinner
+        android:id="@+id/spinner_cell_profile"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="48dp"
+        android:layout_marginBottom="16dp" />
+
     <com.google.android.material.switchmaterial.SwitchMaterial
         android:id="@+id/switch_write_enabled"
         android:layout_width="match_parent"

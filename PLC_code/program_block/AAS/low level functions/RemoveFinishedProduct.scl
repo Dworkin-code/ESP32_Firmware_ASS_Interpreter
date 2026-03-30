@@ -1,4 +1,4 @@
-﻿FUNCTION_BLOCK "RemoveFinishedProduct"
+FUNCTION_BLOCK "RemoveFinishedProduct"
 { S7_Optimized_Access := 'TRUE' }
 VERSION : 0.1
    VAR_INPUT 

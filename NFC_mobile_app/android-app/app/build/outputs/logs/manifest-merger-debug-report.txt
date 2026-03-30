@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:2:1-63:12
-INJECTED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:2:1-63:12
-INJECTED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:2:1-63:12
-INJECTED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:2:1-63:12
+ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:2:1-71:12
+INJECTED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:2:1-71:12
+INJECTED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:2:1-71:12
+INJECTED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:2:1-71:12
 MERGED from [androidx.databinding:viewbinding:8.4.2] C:\Users\honza\.gradle\caches\transforms-4\8203587bdd5c54059b08a1f03d1f0e94\transformed\viewbinding-8.4.2\AndroidManifest.xml:2:1-7:12
 MERGED from [com.google.android.material:material:1.11.0] C:\Users\honza\.gradle\caches\transforms-4\3917e958d0ba2edb79503e92c60920c1\transformed\material-1.11.0\AndroidManifest.xml:17:1-24:12
 MERGED from [androidx.constraintlayout:constraintlayout:2.1.4] C:\Users\honza\.gradle\caches\transforms-4\0f1e0c7c91c835831eda52eb07a45b4b\transformed\constraintlayout-2.1.4\AndroidManifest.xml:2:1-11:12
@@ -72,8 +72,8 @@ ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\a
 	android:name
 		ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:5:19-54
 application
-ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:7:5-62:19
-INJECTED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:7:5-62:19
+ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:7:5-70:19
+INJECTED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:7:5-70:19
 MERGED from [com.google.android.material:material:1.11.0] C:\Users\honza\.gradle\caches\transforms-4\3917e958d0ba2edb79503e92c60920c1\transformed\material-1.11.0\AndroidManifest.xml:22:5-20
 MERGED from [com.google.android.material:material:1.11.0] C:\Users\honza\.gradle\caches\transforms-4\3917e958d0ba2edb79503e92c60920c1\transformed\material-1.11.0\AndroidManifest.xml:22:5-20
 MERGED from [androidx.constraintlayout:constraintlayout:2.1.4] C:\Users\honza\.gradle\caches\transforms-4\0f1e0c7c91c835831eda52eb07a45b4b\transformed\constraintlayout-2.1.4\AndroidManifest.xml:9:5-20
@@ -184,22 +184,38 @@ ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\a
 		ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:53:13-54
 	android:name
 		ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:51:13-48
-activity#com.testbed.nfcrecipetag.ui.BackupsActivity
+activity#com.testbed.nfcrecipetag.ui.DebugRecipeActivity
 ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:54:9-57:57
 	android:exported
 		ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:56:13-37
 	android:theme
 		ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:57:13-54
 	android:name
-		ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:55:13-47
-activity#com.testbed.nfcrecipetag.ui.SettingsActivity
+		ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:55:13-51
+activity#com.testbed.nfcrecipetag.ui.BackupsActivity
 ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:58:9-61:57
 	android:exported
 		ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:60:13-37
 	android:theme
 		ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:61:13-54
 	android:name
-		ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:59:13-48
+		ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:59:13-47
+activity#com.testbed.nfcrecipetag.ui.SettingsActivity
+ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:62:9-65:57
+	android:exported
+		ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:64:13-37
+	android:theme
+		ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:65:13-54
+	android:name
+		ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:63:13-48
+activity#com.testbed.nfcrecipetag.ui.DebugLogActivity
+ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:66:9-69:57
+	android:exported
+		ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:68:13-37
+	android:theme
+		ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:69:13-54
+	android:name
+		ADDED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml:67:13-48
 uses-sdk
 INJECTED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from C:\Users\honza\Documents\AAS_Interpreter\NFC_mobile_app\android-app\app\src\main\AndroidManifest.xml

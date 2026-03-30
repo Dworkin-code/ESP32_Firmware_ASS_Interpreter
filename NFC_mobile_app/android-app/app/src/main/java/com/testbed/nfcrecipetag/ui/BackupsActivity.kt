@@ -27,7 +27,7 @@ class BackupsActivity : AppCompatActivity() {
         val list = BackupManager(this).listBackups()
         binding.recyclerBackups.adapter = BackupsAdapter(list) { entry ->
             val dump = BackupManager(this).loadBackupRaw(entry.metaPath)
-            if (dump != null) TagDetailActivity.start(this, dump)
+            if (dump != null) TagDetailActivity.startFromBackup(this, dump)
         }
     }
 
