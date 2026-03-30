@@ -4,10 +4,19 @@ VERSION : 0.1
    VAR_INPUT 
       item : "typeProductInQueue";   // Item.
       itemPositionP : DInt;   // Item's position in priority queue.
+      StsIdle : Bool;
+      StsReady : Bool;
+      StsBusy : Bool;
+      StsDone : Bool;
+      StsError : Bool;
    END_VAR
 
    VAR_OUTPUT 
       deviceRunning : Bool;   // Variable informing whether Device finished it's run.
+      CmdSetReady : Bool;
+      CmdStart : Bool;
+      CmdResetDone : Bool;
+      CmdProductID : DWord;
    END_VAR
 
    VAR_IN_OUT 
@@ -22,6 +31,9 @@ VERSION : 0.1
       IEC_Timer_0_Instance {InstructionName := 'TON_TIME'; LibVersion := '1.0'; ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : TON_TIME;   // Timer for device.
       doAction { S7_SetPoint := 'True'} : Bool;   // Block can be executed, since item was found.
       finishedAction : Bool;   // Product is finished.
+      seqState : Int;   // Stav sekvenceru
+      stepTimeout : Time := T#2000ms;   // Timeout aktuálního kroku handshake
+      stepTimer {InstructionName := 'TON_TIME'; LibVersion := '1.0'; S7_SetPoint := 'False'} : TON_TIME;   // Časovač pro timeout stavu
    END_VAR
 
    VAR_TEMP 
@@ -30,72 +42,216 @@ VERSION : 0.1
 
 
 BEGIN
-	#IEC_Timer_0_Instance(IN := #doAction AND #OutputPositionSr = WSTRING#'0',
-	                      PT := INT_TO_TIME(#waitTime),
-	                      Q => #finishedAction);
+	// ============================================================
+	// DeviceSlow - handshake based execution
+	// replaces timer-based simulation by real machine state control
+	// ============================================================
 	
-	IF #Valid = TRUE THEN
-	    #waitTime := "InitialWaitTime";
-	    #deviceRunning := TRUE;
-	    IF #actionStatus = WSTRING#'idle' THEN
-	        #doAction := TRUE;
-	    END_IF;
+	// ------------------------------------------------------------
+	// Default pulse outputs - must be FALSE every scan
+	// ------------------------------------------------------------
+	#CmdSetReady := FALSE;
+	#CmdStart := FALSE;
+	#CmdResetDone := FALSE;
+	
+	IF #seqState = 0 AND #Valid = TRUE THEN
+	    #finishedAction := FALSE;
+	END_IF;
+	
+	
+	// ------------------------------------------------------------
+	// CHECK_ITEM
+	// keep original support validation logic
+	// ------------------------------------------------------------
+	REGION CHECK_ITEM
+	    #tempFailed := FALSE;
 	    
-	    REGION CHECK_ITEM
-	        CASE #item.material OF   //check material
-	            "SupportMaterialLow100".."SupportMaterialHigh100":
-	                #waitTime := #waitTime;
-	            "SupportMaterialLow60".."SupportMaterialHigh60":
-	                #waitTime := #waitTime + "DelayedWaitTime";
-	            ELSE
-	                #waitTime := 0;
-	        END_CASE;
-	        
-	        CASE #item."initialPosition/operation" OF   //check supportA
-	            "SupportALow100".."SupportAHigh100":
-	                #waitTime := #waitTime;
-	            "SupportALow60".."SupportAHigh60":
-	                #waitTime := #waitTime + "DelayedWaitTime";
-	            ELSE
-	                #waitTime := 0;
-	        END_CASE;
-	        
-	        CASE #item."finalPosition/operationParameter" OF   //check supportB
-	            "SupportBLow100".."SupportBHigh100":
-	                #waitTime := #waitTime;
-	            "SupportBLow60".."SupportBHigh60":
-	                #waitTime := #waitTime + "DelayedWaitTime";
-	            ELSE
-	                #waitTime := 0;
-	        END_CASE;
-	        
-	        IF #waitTime = 0 THEN
-	            #tempFailed := TRUE;
-	            #deviceRunning := FALSE;
+	    CASE #item.material OF
+	        "SupportMaterialLow100".."SupportMaterialHigh100":
+	            ;
+	        "SupportMaterialLow60".."SupportMaterialHigh60":
+	            ;
 	        ELSE
-	            #tempFailed := FALSE;
-	        END_IF;
-	    END_REGION CHECK_ITEM
+	            #tempFailed := TRUE;
+	    END_CASE;
 	    
-	    REGION UPDATE_ACTION_STATUS
-	        IF #doAction THEN
-	            IF #tempFailed = TRUE THEN
-	                #actionStatus := WSTRING#'failed';
-	            ELSE
-	                #actionStatus := WSTRING#'inProgress';
-	            END_IF;
-	        END_IF;
-	    END_REGION UPDATE_ACTION_STATUS
+	    CASE #item."initialPosition/operation" OF
+	        "SupportALow100".."SupportAHigh100":
+	            ;
+	        "SupportALow60".."SupportAHigh60":
+	            ;
+	        ELSE
+	            #tempFailed := TRUE;
+	    END_CASE;
 	    
-	    IF #finishedAction THEN
-	        #actionStatus := WSTRING#'idle';
+	    CASE #item."finalPosition/operationParameter" OF
+	        "SupportBLow100".."SupportBHigh100":
+	            ;
+	        "SupportBLow60".."SupportBHigh60":
+	            ;
+	        ELSE
+	            #tempFailed := TRUE;
+	    END_CASE;
+	    
+	END_REGION
+	
+	// ------------------------------------------------------------
+	// MAIN LOGIC
+	// ------------------------------------------------------------
+	IF #Valid = TRUE THEN
+	    
+	    // if support check failed -> immediate failure
+	    IF #tempFailed = TRUE THEN
+	        #actionStatus := WSTRING#'failed';
 	        #deviceRunning := FALSE;
 	        #doAction := FALSE;
 	        #Valid := FALSE;
-	        #OutputPositionSr := DELETE(IN := DINT_TO_WSTRING(#item.id), L := 1, P := 1);
+	        #seqState := 0;
+	        
+	    ELSE
+	        
+	        #deviceRunning := TRUE;
+	        
+	        // ----------------------------------------------------
+	        // Timeout timer for sequence steps
+	        // active only in waiting states
+	        // ----------------------------------------------------
+	        #stepTimer(IN := (#seqState = 20) OR (#seqState = 40) OR (#seqState = 50) OR (#seqState = 70),
+	                   PT := #stepTimeout);
+	        
+	        // ----------------------------------------------------
+	        // STATE MACHINE
+	        // ----------------------------------------------------
+	        CASE #seqState OF
+	                
+	                // ------------------------------------------------
+	                // 0 = IDLE / waiting for valid item
+	                // ------------------------------------------------
+	            0:
+	                #actionStatus := WSTRING#'idle';
+	                #doAction := FALSE;
+	                
+	                IF #Valid = TRUE THEN
+	                    #CmdProductID := DINT_TO_DWORD(#item.id);
+	                    #seqState := 10;
+	                END_IF;
+	                
+	                
+	                // ------------------------------------------------
+	                // 10 = pulse SetReady
+	                // ------------------------------------------------
+	            10:
+	                #actionStatus := WSTRING#'inProgress';
+	                #CmdSetReady := TRUE;      // one scan pulse
+	                #stepTimeout := T#5S;
+	                #seqState := 20;
+	                
+	                
+	                // ------------------------------------------------
+	                // 20 = wait for Ready = TRUE
+	                // ------------------------------------------------
+	            20:
+	                IF #StsReady = TRUE THEN
+	                    #seqState := 30;
+	                ELSIF #StsError = TRUE THEN
+	                    #seqState := 100;
+	                ELSIF #stepTimer.Q = TRUE THEN
+	                    #seqState := 100;
+	                END_IF;
+	                
+	                
+	                // ------------------------------------------------
+	                // 30 = pulse Start
+	                // ------------------------------------------------
+	            30:
+	                #CmdStart := TRUE;         // one scan pulse
+	                #stepTimeout := T#5S;
+	                #seqState := 40;
+	                
+	                
+	                // ------------------------------------------------
+	                // 40 = wait for Busy = TRUE
+	                // ------------------------------------------------
+	            40:
+	                IF #StsBusy = TRUE THEN
+	                    #stepTimeout := T#60S;
+	                    #seqState := 50;
+	                ELSIF #StsError = TRUE THEN
+	                    #seqState := 100;
+	                ELSIF #stepTimer.Q = TRUE THEN
+	                    #seqState := 100;
+	                END_IF;
+	                
+	                
+	                // ------------------------------------------------
+	                // 50 = wait for Done = TRUE
+	                // ------------------------------------------------
+	            50:
+	                IF #StsDone = TRUE THEN
+	                    #seqState := 60;
+	                ELSIF #StsError = TRUE THEN
+	                    #seqState := 100;
+	                ELSIF #stepTimer.Q = TRUE THEN
+	                    #seqState := 100;
+	                END_IF;
+	                
+	                
+	                // ------------------------------------------------
+	                // 60 = pulse ResetDone and mark finished
+	                // ------------------------------------------------
+	            60:
+	                #CmdResetDone := TRUE;     // one scan pulse
+	                #finishedAction := TRUE;
+	                #OutputPositionSr := DELETE(IN := DINT_TO_WSTRING(#item.id), L := 1, P := 1);
+	                #stepTimeout := T#5S;
+	                #seqState := 70;
+	                
+	                
+	                // ------------------------------------------------
+	                // 70 = wait for Idle = TRUE
+	                // ------------------------------------------------
+	            70:
+	                IF #StsIdle = TRUE THEN
+	                    #seqState := 80;
+	                ELSIF #StsError = TRUE THEN
+	                    #seqState := 100;
+	                ELSIF #stepTimer.Q = TRUE THEN
+	                    #seqState := 100;
+	                END_IF;
+	                
+	                
+	                // ------------------------------------------------
+	                // 80 = finished
+	                // ------------------------------------------------
+	            80:
+	                #finishedAction := TRUE;
+	                #actionStatus := WSTRING#'idle';
+	                #deviceRunning := FALSE;
+	                #doAction := FALSE;
+	                #Valid := FALSE;
+	                #seqState := 0;
+	                
+	                
+	                // ------------------------------------------------
+	                // 100 = error
+	                // ------------------------------------------------
+	            100:
+	                #actionStatus := WSTRING#'failed';
+	                #deviceRunning := FALSE;
+	                #doAction := FALSE;
+	                #Valid := FALSE;
+	                #seqState := 0;
+	                
+	        END_CASE;
+	        
 	    END_IF;
 	    
+	ELSE
+	    // no valid action -> keep idle
+	    #deviceRunning := FALSE;
+	    #actionStatus := WSTRING#'idle';
+	    #doAction := FALSE;
+	    #seqState := 0;
 	END_IF;
-	
 END_FUNCTION_BLOCK
 

@@ -145,10 +145,10 @@ TCardInfo GetCardInfoByNumber(uint8_t aNumOfRecipe)
     tempRecipeInfo.RecipeSteps = 5;
     tempRecipeInfo.ActualRecipeStep = 0;
     tempRecipeSteps = malloc(TRecipeStep_Size * tempRecipeInfo.RecipeSteps);
-    tempRecipeSteps[0] = GetRecipeStepByNumber(4, 5);  // Cisteni(7) 5 sekund
+    tempRecipeSteps[0] = GetRecipeStepByNumber(7, 5);  // Cisteni(7) 5 sekund
     tempRecipeSteps[1] = GetRecipeStepByNumber(1, 20); // Vodka(1) 20ml
-    tempRecipeSteps[2] = GetRecipeStepByNumber(4, 0);  // Drink k zakaznikovi(9)
-    tempRecipeSteps[3] = GetRecipeStepByNumber(5, 20); // Cisteni(7) 20 sekund
+    tempRecipeSteps[2] = GetRecipeStepByNumber(9, 0);  // Drink k zakaznikovi(9)
+    tempRecipeSteps[3] = GetRecipeStepByNumber(7, 20); // Cisteni(7) 20 sekund
     tempRecipeSteps[4] = GetRecipeStepByNumber(8, 0);  // Navrat do skladu(8)
 
     break;
@@ -171,10 +171,10 @@ TCardInfo GetCardInfoByNumber(uint8_t aNumOfRecipe)
     tempRecipeInfo.RecipeSteps = 5;
     tempRecipeInfo.ActualRecipeStep = 0;
     tempRecipeSteps = malloc(TRecipeStep_Size * tempRecipeInfo.RecipeSteps);
-    tempRecipeSteps[0] = GetRecipeStepByNumber(4, 5);  // Cisteni(7) 5 sekund
+    tempRecipeSteps[0] = GetRecipeStepByNumber(7, 5);  // Cisteni(7) 5 sekund
     tempRecipeSteps[1] = GetRecipeStepByNumber(1, 20); // Vodka(1) 20ml
-    tempRecipeSteps[2] = GetRecipeStepByNumber(4, 0);  // Drink k zakaznikovi(9)
-    tempRecipeSteps[3] = GetRecipeStepByNumber(5, 20); // Cisteni(7) 20 sekund
+    tempRecipeSteps[2] = GetRecipeStepByNumber(9, 0);  // Drink k zakaznikovi(9)
+    tempRecipeSteps[3] = GetRecipeStepByNumber(7, 20); // Cisteni(7) 20 sekund
     tempRecipeSteps[4] = GetRecipeStepByNumber(8, 0);  // Navrat do skladu(8)
 
     break;

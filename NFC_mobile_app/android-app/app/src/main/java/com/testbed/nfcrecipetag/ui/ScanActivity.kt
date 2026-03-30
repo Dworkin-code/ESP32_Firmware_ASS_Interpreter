@@ -51,7 +51,7 @@ class ScanActivity : AppCompatActivity() {
                     val dump = readTagToDump(tag)
                     if (dump != null) {
                         binding.scanStatus.text = "OK: ${dump.metadata.uidHex}"
-                        TagDetailActivity.start(this, dump)
+                        TagDetailActivity.startFromScan(this, dump)
                         finish()
                     } else {
                         binding.scanStatus.text = "Unsupported tag type"

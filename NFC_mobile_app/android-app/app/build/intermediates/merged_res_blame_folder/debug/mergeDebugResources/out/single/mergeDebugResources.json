@@ -4,8 +4,16 @@
         "source": "C:\\Users\\honza\\.gradle\\daemon\\8.6\\com.testbed.nfcrecipetag.app-main-40:\\layout\\activity_write_tag.xml"
     },
     {
+        "merged": "C:\\Users\\honza\\.gradle\\daemon\\8.6\\com.testbed.nfcrecipetag.app-debug-38:\\layout_activity_debug_log.xml.flat",
+        "source": "C:\\Users\\honza\\.gradle\\daemon\\8.6\\com.testbed.nfcrecipetag.app-main-40:\\layout\\activity_debug_log.xml"
+    },
+    {
         "merged": "C:\\Users\\honza\\.gradle\\daemon\\8.6\\com.testbed.nfcrecipetag.app-debug-38:\\drawable_ic_launcher_foreground.xml.flat",
         "source": "C:\\Users\\honza\\.gradle\\daemon\\8.6\\com.testbed.nfcrecipetag.app-main-40:\\drawable\\ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "C:\\Users\\honza\\.gradle\\daemon\\8.6\\com.testbed.nfcrecipetag.app-debug-38:\\layout_activity_debug_recipe.xml.flat",
+        "source": "C:\\Users\\honza\\.gradle\\daemon\\8.6\\com.testbed.nfcrecipetag.app-main-40:\\layout\\activity_debug_recipe.xml"
     },
     {
         "merged": "C:\\Users\\honza\\.gradle\\daemon\\8.6\\com.testbed.nfcrecipetag.app-debug-38:\\layout_activity_scan.xml.flat",
@@ -20,16 +28,16 @@
         "source": "C:\\Users\\honza\\.gradle\\daemon\\8.6\\com.testbed.nfcrecipetag.app-main-40:\\layout\\activity_backups.xml"
     },
     {
+        "merged": "com.testbed.nfcrecipetag.app-debug-38:/layout_activity_debug_log.xml.flat",
+        "source": "com.testbed.nfcrecipetag.app-main-40:/layout/activity_debug_log.xml"
+    },
+    {
         "merged": "C:\\Users\\honza\\.gradle\\daemon\\8.6\\com.testbed.nfcrecipetag.app-debug-38:\\layout_activity_settings.xml.flat",
         "source": "C:\\Users\\honza\\.gradle\\daemon\\8.6\\com.testbed.nfcrecipetag.app-main-40:\\layout\\activity_settings.xml"
     },
     {
         "merged": "C:\\Users\\honza\\.gradle\\daemon\\8.6\\com.testbed.nfcrecipetag.app-debug-38:\\layout_activity_tag_detail.xml.flat",
         "source": "C:\\Users\\honza\\.gradle\\daemon\\8.6\\com.testbed.nfcrecipetag.app-main-40:\\layout\\activity_tag_detail.xml"
-    },
-    {
-        "merged": "com.testbed.nfcrecipetag.app-debug-38:/layout_activity_edit_recipe.xml.flat",
-        "source": "com.testbed.nfcrecipetag.app-main-40:/layout/activity_edit_recipe.xml"
     },
     {
         "merged": "C:\\Users\\honza\\.gradle\\daemon\\8.6\\com.testbed.nfcrecipetag.app-debug-38:\\layout_activity_edit_recipe.xml.flat",
@@ -40,11 +48,7 @@
         "source": "C:\\Users\\honza\\.gradle\\daemon\\8.6\\com.testbed.nfcrecipetag.app-main-40:\\layout\\activity_main.xml"
     },
     {
-        "merged": "com.testbed.nfcrecipetag.app-debug-38:/layout_item_step_editor.xml.flat",
-        "source": "com.testbed.nfcrecipetag.app-main-40:/layout/item_step_editor.xml"
-    },
-    {
-        "merged": "com.testbed.nfcrecipetag.app-debug-38:/layout_activity_tag_detail.xml.flat",
-        "source": "com.testbed.nfcrecipetag.app-main-40:/layout/activity_tag_detail.xml"
+        "merged": "C:\\Users\\honza\\.gradle\\daemon\\8.6\\com.testbed.nfcrecipetag.app-debug-38:\\layout_item_step_editor.xml.flat",
+        "source": "C:\\Users\\honza\\.gradle\\daemon\\8.6\\com.testbed.nfcrecipetag.app-main-40:\\layout\\item_step_editor.xml"
     }
 ]

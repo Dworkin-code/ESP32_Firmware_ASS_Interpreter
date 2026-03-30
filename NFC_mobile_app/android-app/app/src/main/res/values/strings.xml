@@ -11,10 +11,12 @@
     <string name="decoded_recipe">Decoded recipe</string>
     <string name="edit_recipe">Edit recipe</string>
     <string name="write_tag">Write to tag</string>
-    <string name="save_backup">Save backup</string>
+    <string name="save_backup">Backup NFC Tag</string>
     <string name="backups">Backups</string>
     <string name="expert_mode">Expert mode</string>
     <string name="write_enabled">Write enabled</string>
     <string name="memory_size_fmt">%d bytes</string>
     <string name="load_test_recipe_shaker">Load test recipe (Shaker 5 s)</string>
+    <string name="load_test_recipe_aas">Load AAS test recipe (from cell profile)</string>
+    <string name="cell_profile">Cell profile</string>
 </resources>

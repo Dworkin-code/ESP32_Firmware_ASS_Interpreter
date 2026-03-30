@@ -5,6 +5,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
+import android.widget.Spinner;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.viewbinding.ViewBinding;
@@ -20,14 +21,19 @@ public final class ActivitySettingsBinding implements ViewBinding {
   private final LinearLayout rootView;
 
   @NonNull
+  public final Spinner spinnerCellProfile;
+
+  @NonNull
   public final SwitchMaterial switchExpertMode;
 
   @NonNull
   public final SwitchMaterial switchWriteEnabled;
 
   private ActivitySettingsBinding(@NonNull LinearLayout rootView,
-      @NonNull SwitchMaterial switchExpertMode, @NonNull SwitchMaterial switchWriteEnabled) {
+      @NonNull Spinner spinnerCellProfile, @NonNull SwitchMaterial switchExpertMode,
+      @NonNull SwitchMaterial switchWriteEnabled) {
     this.rootView = rootView;
+    this.spinnerCellProfile = spinnerCellProfile;
     this.switchExpertMode = switchExpertMode;
     this.switchWriteEnabled = switchWriteEnabled;
   }
@@ -59,6 +65,12 @@ public final class ActivitySettingsBinding implements ViewBinding {
     // This is done to optimize the compiled bytecode for size and performance.
     int id;
     missingId: {
+      id = R.id.spinner_cell_profile;
+      Spinner spinnerCellProfile = ViewBindings.findChildViewById(rootView, id);
+      if (spinnerCellProfile == null) {
+        break missingId;
+      }
+
       id = R.id.switch_expert_mode;
       SwitchMaterial switchExpertMode = ViewBindings.findChildViewById(rootView, id);
       if (switchExpertMode == null) {
@@ -71,8 +83,8 @@ public final class ActivitySettingsBinding implements ViewBinding {
         break missingId;
       }
 
-      return new ActivitySettingsBinding((LinearLayout) rootView, switchExpertMode,
-          switchWriteEnabled);
+      return new ActivitySettingsBinding((LinearLayout) rootView, spinnerCellProfile,
+          switchExpertMode, switchWriteEnabled);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

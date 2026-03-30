@@ -4,6 +4,7 @@ package com.testbed.nfcrecipetag.databinding;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
@@ -28,18 +29,77 @@ public final class ItemStepEditorBinding implements ViewBinding {
   public final LinearLayout stepEditorDurationRow;
 
   @NonNull
+  public final TextView stepEditorHumanSummary;
+
+  @NonNull
+  public final CheckBox stepEditorIsDone;
+
+  @NonNull
+  public final CheckBox stepEditorIsProcess;
+
+  @NonNull
+  public final CheckBox stepEditorIsTransport;
+
+  @NonNull
   public final TextView stepEditorLabel;
+
+  @NonNull
+  public final CheckBox stepEditorNeedTransport;
+
+  @NonNull
+  public final EditText stepEditorPriceProcess;
+
+  @NonNull
+  public final EditText stepEditorPriceTransport;
+
+  @NonNull
+  public final EditText stepEditorProcessCellId;
+
+  @NonNull
+  public final EditText stepEditorProcessCellResId;
+
+  @NonNull
+  public final EditText stepEditorSupportB;
+
+  @NonNull
+  public final LinearLayout stepEditorSupportBRow;
+
+  @NonNull
+  public final EditText stepEditorTransportCellId;
+
+  @NonNull
+  public final EditText stepEditorTransportCellResId;
 
   @NonNull
   public final Spinner stepEditorType;
 
   private ItemStepEditorBinding(@NonNull LinearLayout rootView,
       @NonNull EditText stepEditorDuration, @NonNull LinearLayout stepEditorDurationRow,
-      @NonNull TextView stepEditorLabel, @NonNull Spinner stepEditorType) {
+      @NonNull TextView stepEditorHumanSummary, @NonNull CheckBox stepEditorIsDone,
+      @NonNull CheckBox stepEditorIsProcess, @NonNull CheckBox stepEditorIsTransport,
+      @NonNull TextView stepEditorLabel, @NonNull CheckBox stepEditorNeedTransport,
+      @NonNull EditText stepEditorPriceProcess, @NonNull EditText stepEditorPriceTransport,
+      @NonNull EditText stepEditorProcessCellId, @NonNull EditText stepEditorProcessCellResId,
+      @NonNull EditText stepEditorSupportB, @NonNull LinearLayout stepEditorSupportBRow,
+      @NonNull EditText stepEditorTransportCellId, @NonNull EditText stepEditorTransportCellResId,
+      @NonNull Spinner stepEditorType) {
     this.rootView = rootView;
     this.stepEditorDuration = stepEditorDuration;
     this.stepEditorDurationRow = stepEditorDurationRow;
+    this.stepEditorHumanSummary = stepEditorHumanSummary;
+    this.stepEditorIsDone = stepEditorIsDone;
+    this.stepEditorIsProcess = stepEditorIsProcess;
+    this.stepEditorIsTransport = stepEditorIsTransport;
     this.stepEditorLabel = stepEditorLabel;
+    this.stepEditorNeedTransport = stepEditorNeedTransport;
+    this.stepEditorPriceProcess = stepEditorPriceProcess;
+    this.stepEditorPriceTransport = stepEditorPriceTransport;
+    this.stepEditorProcessCellId = stepEditorProcessCellId;
+    this.stepEditorProcessCellResId = stepEditorProcessCellResId;
+    this.stepEditorSupportB = stepEditorSupportB;
+    this.stepEditorSupportBRow = stepEditorSupportBRow;
+    this.stepEditorTransportCellId = stepEditorTransportCellId;
+    this.stepEditorTransportCellResId = stepEditorTransportCellResId;
     this.stepEditorType = stepEditorType;
   }
 
@@ -82,9 +142,87 @@ public final class ItemStepEditorBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.step_editor_human_summary;
+      TextView stepEditorHumanSummary = ViewBindings.findChildViewById(rootView, id);
+      if (stepEditorHumanSummary == null) {
+        break missingId;
+      }
+
+      id = R.id.step_editor_is_done;
+      CheckBox stepEditorIsDone = ViewBindings.findChildViewById(rootView, id);
+      if (stepEditorIsDone == null) {
+        break missingId;
+      }
+
+      id = R.id.step_editor_is_process;
+      CheckBox stepEditorIsProcess = ViewBindings.findChildViewById(rootView, id);
+      if (stepEditorIsProcess == null) {
+        break missingId;
+      }
+
+      id = R.id.step_editor_is_transport;
+      CheckBox stepEditorIsTransport = ViewBindings.findChildViewById(rootView, id);
+      if (stepEditorIsTransport == null) {
+        break missingId;
+      }
+
       id = R.id.step_editor_label;
       TextView stepEditorLabel = ViewBindings.findChildViewById(rootView, id);
       if (stepEditorLabel == null) {
+        break missingId;
+      }
+
+      id = R.id.step_editor_need_transport;
+      CheckBox stepEditorNeedTransport = ViewBindings.findChildViewById(rootView, id);
+      if (stepEditorNeedTransport == null) {
+        break missingId;
+      }
+
+      id = R.id.step_editor_price_process;
+      EditText stepEditorPriceProcess = ViewBindings.findChildViewById(rootView, id);
+      if (stepEditorPriceProcess == null) {
+        break missingId;
+      }
+
+      id = R.id.step_editor_price_transport;
+      EditText stepEditorPriceTransport = ViewBindings.findChildViewById(rootView, id);
+      if (stepEditorPriceTransport == null) {
+        break missingId;
+      }
+
+      id = R.id.step_editor_process_cell_id;
+      EditText stepEditorProcessCellId = ViewBindings.findChildViewById(rootView, id);
+      if (stepEditorProcessCellId == null) {
+        break missingId;
+      }
+
+      id = R.id.step_editor_process_cell_res_id;
+      EditText stepEditorProcessCellResId = ViewBindings.findChildViewById(rootView, id);
+      if (stepEditorProcessCellResId == null) {
+        break missingId;
+      }
+
+      id = R.id.step_editor_support_b;
+      EditText stepEditorSupportB = ViewBindings.findChildViewById(rootView, id);
+      if (stepEditorSupportB == null) {
+        break missingId;
+      }
+
+      id = R.id.step_editor_support_b_row;
+      LinearLayout stepEditorSupportBRow = ViewBindings.findChildViewById(rootView, id);
+      if (stepEditorSupportBRow == null) {
+        break missingId;
+      }
+
+      id = R.id.step_editor_transport_cell_id;
+      EditText stepEditorTransportCellId = ViewBindings.findChildViewById(rootView, id);
+      if (stepEditorTransportCellId == null) {
+        break missingId;
+      }
+
+      id = R.id.step_editor_transport_cell_res_id;
+      EditText stepEditorTransportCellResId = ViewBindings.findChildViewById(rootView, id);
+      if (stepEditorTransportCellResId == null) {
         break missingId;
       }
 
@@ -95,7 +233,11 @@ public final class ItemStepEditorBinding implements ViewBinding {
       }
 
       return new ItemStepEditorBinding((LinearLayout) rootView, stepEditorDuration,
-          stepEditorDurationRow, stepEditorLabel, stepEditorType);
+          stepEditorDurationRow, stepEditorHumanSummary, stepEditorIsDone, stepEditorIsProcess,
+          stepEditorIsTransport, stepEditorLabel, stepEditorNeedTransport, stepEditorPriceProcess,
+          stepEditorPriceTransport, stepEditorProcessCellId, stepEditorProcessCellResId,
+          stepEditorSupportB, stepEditorSupportBRow, stepEditorTransportCellId,
+          stepEditorTransportCellResId, stepEditorType);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

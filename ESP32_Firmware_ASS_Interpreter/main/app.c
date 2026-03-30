@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <esp_log.h>
 #include <esp_log_internal.h>
+#include "esp_timer.h"
 #include "opcua_esp32.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -325,22 +326,31 @@ void State_Machine(void *pvParameter)
         }
         else
         {
-          /* report_ok: always run step check first. End-of-recipe: mark done, skip GetSupported/ReserveAction */
-          uint8_t curStep = iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep;
-          uint8_t numSteps = iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeSteps;
-          if (curStep >= numSteps)
+          /* report_ok: always run step/route check first. */
+          TRecipeInfo *info = &iHandlerData.sWorkingCardInfo.sRecipeInfo;
+          uint8_t curStep = info->ActualRecipeStep;
+          uint8_t numSteps = info->RecipeSteps;
+          bool recipeFinished = (info->RecipeDone == true) || (curStep >= numSteps);
+
+          if (recipeFinished)
           {
-            NFC_STATE_DEBUG(GetRafName(RAF), "AAS: step index %u >= steps %u, recipe done\n", (unsigned)curStep, (unsigned)numSteps);
-            iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone = true;
-            if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
+            NFC_STATE_DEBUG(GetRafName(RAF), "AAS_DECISION: step %u / %u -> RECIPE_FINISHED\n",
+                            (unsigned)curStep, (unsigned)numSteps);
+            /* If not yet flagged as done on tag, mark and persist once. */
+            if (!info->RecipeDone)
             {
-              NFC_Handler_WriteSafeInfo(&iHandlerData, &iHandlerData.sWorkingCardInfo.sRecipeInfo);
-              NFC_Handler_Sync(&iHandlerData);
-              xSemaphoreGive(Parametry->xNFCReader);
+              info->RecipeDone = true;
+              if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
+              {
+                NFC_Handler_WriteSafeInfo(&iHandlerData, info);
+                NFC_Handler_Sync(&iHandlerData);
+                xSemaphoreGive(Parametry->xNFCReader);
+              }
             }
-            RAF = State_Mimo_Polozena;
+            RAF = State_KonecReceptu;
             continue;
           }
+
           /* Re-scan guard: same sr_id within window -> do not call ReserveAction again */
           uint32_t now_ms = (uint32_t)pdTICKS_TO_MS(xTaskGetTickCount());
           if (strcmp(sr_id_buf, s_lastSeenSrId) == 0 && (now_ms - s_lastActionTimestampMs) < (uint32_t)AAS_RESCAN_GUARD_MS)
@@ -349,90 +359,150 @@ void State_Machine(void *pvParameter)
             RAF = State_WaitUntilRemoved;
             continue;
           }
+
           TRecipeStep *step = &iHandlerData.sWorkingCardInfo.sRecipeStep[curStep];
-          /* Build 5-field message: sr_id/priority/material/parameterA/parameterB (priority=0) */
-          char msg5[80];
-          int n = snprintf(msg5, sizeof(msg5), "%s/0/%u/%u/%u", sr_id_buf,
-                           (unsigned)step->TypeOfProcess, (unsigned)step->ParameterProcess1, (unsigned)step->ParameterProcess2);
-          if (n < 0 || (size_t)n >= sizeof(msg5))
+          NFC_STATE_DEBUG(GetRafName(RAF),
+                          "AAS_DECISION: ActualRecipeStep=%u RecipeSteps=%u TypeOfProcess=%u P1=%u P2=%u\n",
+                          (unsigned)curStep, (unsigned)numSteps,
+                          (unsigned)step->TypeOfProcess,
+                          (unsigned)step->ParameterProcess1,
+                          (unsigned)step->ParameterProcess2);
+
+          if (step->TypeOfProcess == ToStorageGlass)
           {
-            NFC_STATE_DEBUG(GetRafName(RAF), "AAS: message build failed\n");
-            RAF = State_Mimo_Polozena;
-            continue;
-          }
-          char outBuf[128];
-          outBuf[0] = '\0';
-          if (xSemaphoreTake(Parametry->xEthernet, (TickType_t)10000) != pdTRUE)
-          {
-            NFC_STATE_DEBUG(GetRafName(RAF), "AAS: no ethernet semaphore\n");
-            continue;
-          }
-          /* Optional: GetSupported; if response starts with "Error:" abort step */
-          bool ok_supported = OPC_GetSupported(MyCellInfo.IPAdress, msg5, outBuf, sizeof(outBuf));
-          if (ok_supported && outBuf[0] != '\0' && strncmp(outBuf, "Error:", 6) == 0)
-          {
-            NFC_STATE_DEBUG(GetRafName(RAF), "AAS: GetSupported returned Error -> %s\n", outBuf);
-            iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone = true;
+            NFC_STATE_DEBUG(GetRafName(RAF), "AAS_DECISION: LOCAL_PLC_AAS (TypeOfProcess=ToStorageGlass)\n");
+            /* Build 5-field message: sr_id/priority/material/parameterA/parameterB (priority=0) */
+            char msg5[80];
+            int n = snprintf(msg5, sizeof(msg5), "%s/0/%u/%u/%u", sr_id_buf,
+                             (unsigned)step->TypeOfProcess, (unsigned)step->ParameterProcess1, (unsigned)step->ParameterProcess2);
+            if (n < 0 || (size_t)n >= sizeof(msg5))
+            {
+              NFC_STATE_DEBUG(GetRafName(RAF), "AAS: message build failed\n");
+              RAF = State_Mimo_Polozena;
+              continue;
+            }
+            char outBuf[128];
+            outBuf[0] = '\0';
+            if (xSemaphoreTake(Parametry->xEthernet, (TickType_t)10000) != pdTRUE)
+            {
+              NFC_STATE_DEBUG(GetRafName(RAF), "AAS: no ethernet semaphore\n");
+              continue;
+            }
+            /* Optional: GetSupported; if response starts with "Error:" abort step */
+            bool ok_supported = OPC_GetSupported(MyCellInfo.IPAdress, msg5, outBuf, sizeof(outBuf));
+            if (ok_supported && outBuf[0] != '\0' && strncmp(outBuf, "Error:", 6) == 0)
+            {
+              NFC_STATE_DEBUG(GetRafName(RAF), "AAS: GetSupported returned Error -> %s\n", outBuf);
+              iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone = true;
+              xSemaphoreGive(Parametry->xEthernet);
+              if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
+              {
+                NFC_Handler_WriteSafeInfo(&iHandlerData, &iHandlerData.sWorkingCardInfo.sRecipeInfo);
+                NFC_Handler_Sync(&iHandlerData);
+                xSemaphoreGive(Parametry->xNFCReader);
+              }
+              RAF = State_Mimo_Polozena;
+              continue;
+            }
+            /* ReserveAction */
+            outBuf[0] = '\0';
+            bool ok_reserve = OPC_ReserveAction(MyCellInfo.IPAdress, msg5, outBuf, sizeof(outBuf));
+            if (!ok_reserve || (outBuf[0] != '\0' && strncmp(outBuf, "Error:", 6) == 0))
+            {
+              NFC_STATE_DEBUG(GetRafName(RAF), "AAS: ReserveAction failed or Error -> %s\n", outBuf);
+              iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone = true;
+              xSemaphoreGive(Parametry->xEthernet);
+              if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
+              {
+                NFC_Handler_WriteSafeInfo(&iHandlerData, &iHandlerData.sWorkingCardInfo.sRecipeInfo);
+                NFC_Handler_Sync(&iHandlerData);
+                xSemaphoreGive(Parametry->xNFCReader);
+              }
+              RAF = State_Mimo_Polozena;
+              continue;
+            }
+            /* Success: record for re-scan guard, then poll GetStatus until finished or error/timeout */
+            (void)strncpy(s_lastSeenSrId, sr_id_buf, sizeof(s_lastSeenSrId) - 1);
+            s_lastSeenSrId[sizeof(s_lastSeenSrId) - 1] = '\0';
+            s_lastActionTimestampMs = (uint32_t)pdTICKS_TO_MS(xTaskGetTickCount());
+            bool completion_ok = OPC_AAS_WaitCompletionPoll(MyCellInfo.IPAdress, sr_id_buf, (uint32_t)AAS_COMPLETION_TIMEOUT_MS, 500);
             xSemaphoreGive(Parametry->xEthernet);
-            if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
+            if (!completion_ok)
             {
-              NFC_Handler_WriteSafeInfo(&iHandlerData, &iHandlerData.sWorkingCardInfo.sRecipeInfo);
-              NFC_Handler_Sync(&iHandlerData);
+              NFC_STATE_DEBUG(GetRafName(RAF), "AAS: completion error or timeout -> RecipeDone\n");
+              iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone = true;
+              if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
+              {
+                NFC_Handler_WriteSafeInfo(&iHandlerData, &iHandlerData.sWorkingCardInfo.sRecipeInfo);
+                NFC_Handler_Sync(&iHandlerData);
+                xSemaphoreGive(Parametry->xNFCReader);
+              }
+              RAF = State_Mimo_Polozena;
+              continue;
+            }
+            NFC_STATE_DEBUG(GetRafName(RAF), "AAS: completion poll SUCCESS, entering write-back path\n");
+            NFC_STATE_DEBUG(GetRafName(RAF), "AAS: current step index=%u\n", (unsigned)curStep);
+            step->IsStepDone = 1;
+            iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep = curStep + 1;
+            NFC_STATE_DEBUG(GetRafName(RAF), "AAS: new ActualRecipeStep=%u\n",
+                            (unsigned)iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep);
+            if (iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep >= numSteps)
+              iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone = true;
+            NFC_STATE_DEBUG(GetRafName(RAF), "AAS: RecipeDone=%u\n",
+                            (unsigned)iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone);
+            BaseType_t nfc_take_res = xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000);
+            NFC_STATE_DEBUG(GetRafName(RAF), "AAS: xSemaphoreTake(xNFCReader,10000)=%ld\n", (long)nfc_take_res);
+            if (nfc_take_res == pdTRUE)
+            {
+              int64_t wb_step_start_ms = esp_timer_get_time() / 1000;
+              NFC_STATE_DEBUG(GetRafName(RAF), "AAS: WRITEBACK start NFC_Handler_WriteStep t=%lldms\n", (long long)wb_step_start_ms);
+              uint8_t write_step_res = NFC_Handler_WriteStep(&iHandlerData, step, curStep);
+              int64_t wb_step_end_ms = esp_timer_get_time() / 1000;
+              NFC_STATE_DEBUG(GetRafName(RAF), "AAS: WRITEBACK end NFC_Handler_WriteStep res=%u dt=%lldms t=%lldms\n",
+                              (unsigned)write_step_res,
+                              (long long)(wb_step_end_ms - wb_step_start_ms),
+                              (long long)wb_step_end_ms);
+
+              int64_t wb_info_start_ms = esp_timer_get_time() / 1000;
+              NFC_STATE_DEBUG(GetRafName(RAF), "AAS: WRITEBACK start NFC_Handler_WriteSafeInfo t=%lldms\n", (long long)wb_info_start_ms);
+              uint8_t write_info_res = NFC_Handler_WriteSafeInfo(&iHandlerData, &iHandlerData.sWorkingCardInfo.sRecipeInfo);
+              int64_t wb_info_end_ms = esp_timer_get_time() / 1000;
+              NFC_STATE_DEBUG(GetRafName(RAF), "AAS: WRITEBACK end NFC_Handler_WriteSafeInfo res=%u dt=%lldms t=%lldms\n",
+                              (unsigned)write_info_res,
+                              (long long)(wb_info_end_ms - wb_info_start_ms),
+                              (long long)wb_info_end_ms);
+
+              int64_t wb_sync_start_ms = esp_timer_get_time() / 1000;
+              NFC_STATE_DEBUG(GetRafName(RAF), "AAS: WRITEBACK start NFC_Handler_Sync t=%lldms\n", (long long)wb_sync_start_ms);
+              uint8_t sync_res = NFC_Handler_Sync(&iHandlerData);
+              int64_t wb_sync_end_ms = esp_timer_get_time() / 1000;
+              NFC_STATE_DEBUG(GetRafName(RAF), "AAS: WRITEBACK end NFC_Handler_Sync res=%u dt=%lldms t=%lldms\n",
+                              (unsigned)sync_res,
+                              (long long)(wb_sync_end_ms - wb_sync_start_ms),
+                              (long long)wb_sync_end_ms);
+              NFC_STATE_DEBUG(GetRafName(RAF), "AAS: NFC_Handler_WriteStep=%u\n", (unsigned)write_step_res);
+              NFC_STATE_DEBUG(GetRafName(RAF), "AAS: NFC_Handler_WriteSafeInfo=%u\n", (unsigned)write_info_res);
+              NFC_STATE_DEBUG(GetRafName(RAF), "AAS: NFC_Handler_Sync=%u\n", (unsigned)sync_res);
               xSemaphoreGive(Parametry->xNFCReader);
             }
-            RAF = State_Mimo_Polozena;
-            continue;
-          }
-          /* ReserveAction */
-          outBuf[0] = '\0';
-          bool ok_reserve = OPC_ReserveAction(MyCellInfo.IPAdress, msg5, outBuf, sizeof(outBuf));
-          if (!ok_reserve || (outBuf[0] != '\0' && strncmp(outBuf, "Error:", 6) == 0))
-          {
-            NFC_STATE_DEBUG(GetRafName(RAF), "AAS: ReserveAction failed or Error -> %s\n", outBuf);
-            iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone = true;
-            xSemaphoreGive(Parametry->xEthernet);
-            if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
+            else
             {
-              NFC_Handler_WriteSafeInfo(&iHandlerData, &iHandlerData.sWorkingCardInfo.sRecipeInfo);
-              NFC_Handler_Sync(&iHandlerData);
-              xSemaphoreGive(Parametry->xNFCReader);
+              NFC_STATE_DEBUG(GetRafName(RAF), "AAS: NFC write-back skipped, xNFCReader semaphore not acquired\n");
             }
-            RAF = State_Mimo_Polozena;
+            NFC_STATE_DEBUG(GetRafName(RAF), "AAS: step %u done, write-back OK\n", (unsigned)curStep);
+            NFC_STATE_DEBUG(GetRafName(RAF), "AAS: transitioning to State_WaitUntilRemoved\n");
+            RAF = State_WaitUntilRemoved;
             continue;
           }
-          /* Success: record for re-scan guard, then poll GetStatus until finished or error/timeout */
-          (void)strncpy(s_lastSeenSrId, sr_id_buf, sizeof(s_lastSeenSrId) - 1);
-          s_lastSeenSrId[sizeof(s_lastSeenSrId) - 1] = '\0';
-          s_lastActionTimestampMs = (uint32_t)pdTICKS_TO_MS(xTaskGetTickCount());
-          bool completion_ok = OPC_AAS_WaitCompletionPoll(MyCellInfo.IPAdress, sr_id_buf, (uint32_t)AAS_COMPLETION_TIMEOUT_MS, 500);
-          xSemaphoreGive(Parametry->xEthernet);
-          if (!completion_ok)
+          else
           {
-            NFC_STATE_DEBUG(GetRafName(RAF), "AAS: completion error or timeout -> RecipeDone\n");
-            iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone = true;
-            if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
-            {
-              NFC_Handler_WriteSafeInfo(&iHandlerData, &iHandlerData.sWorkingCardInfo.sRecipeInfo);
-              NFC_Handler_Sync(&iHandlerData);
-              xSemaphoreGive(Parametry->xNFCReader);
-            }
-            RAF = State_Mimo_Polozena;
+            NFC_STATE_DEBUG(GetRafName(RAF), "AAS_DECISION: REQUEST_TRANSPORT (TypeOfProcess=%u)\n",
+                            (unsigned)step->TypeOfProcess);
+            /* Route to existing transport / production routing logic. */
+            RAF = State_Inicializace_ZiskaniAdres;
+            RAFnext = State_Poptavka_Vyroba;
             continue;
           }
-          step->IsStepDone = 1;
-          iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep = curStep + 1;
-          if (iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep >= numSteps)
-            iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone = true;
-          if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
-          {
-            NFC_Handler_WriteStep(&iHandlerData, step, curStep);
-            NFC_Handler_WriteSafeInfo(&iHandlerData, &iHandlerData.sWorkingCardInfo.sRecipeInfo);
-            NFC_Handler_Sync(&iHandlerData);
-            xSemaphoreGive(Parametry->xNFCReader);
-          }
-          NFC_STATE_DEBUG(GetRafName(RAF), "AAS: step %u done, write-back OK\n", (unsigned)curStep);
-          RAF = State_WaitUntilRemoved;
-          continue;
         }
       }
       /* Fall-through to legacy branch if not AAS or no sr_id */
@@ -778,6 +848,7 @@ void State_Machine(void *pvParameter)
     case State_WaitUntilRemoved:
     {
 
+      NFC_STATE_DEBUG(GetRafName(RAF), "State_WaitUntilRemoved entered\n");
       NFC_STATE_DEBUG(GetRafName(RAF), "Cekam nez tag zmizi po odebrani transportem\n");
 
       if (!Parametry->CardOnReader)
@@ -1048,6 +1119,7 @@ void OPC_Permanent_Test(void *pvParameter)
 
       if (ok && client != NULL)
       {
+        /* Debug session: suppress repetitive success spam to keep AAS path visible. */
         printf("OPC_TEST: Pripojeni na %s USPELO.\n", MyCellInfo.IPAdress);
         /* případně jednoduchý dotaz na server by šel sem */
         UA_Client_disconnect(client);
@@ -1102,7 +1174,7 @@ void app_main()
   nvs_close(nvs_handle);
   printf("ID_Of_Interpretter: %d\n", MyCellInfo.IDofCell);
 
-  MyCellInfo.IPAdress = "192.168.168.63:4840";
+  MyCellInfo.IPAdress = "192.168.168.203:4840";
   MyCellInfo.IPAdressLenght = strlen(MyCellInfo.IPAdress);
   MyCellInfo.ProcessTypes = processTypes1;
   MyCellInfo.ProcessTypesLenght = 3;

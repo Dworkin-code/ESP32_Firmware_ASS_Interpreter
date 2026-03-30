@@ -32,6 +32,29 @@ object ProcessTypes {
 
     fun name(value: Int): String = ALL.find { it.first == value }?.second ?: "Type$value"
 
+    /**
+     * Human-readable drink name for StorageAlcohol / StorageNonAlcohol steps,
+     * based on firmware enums AlcoholType and NonAlcoholType.
+     *
+     * STORAGE_ALCOHOL: 0=Vodka, 1=Rum, 2=Goralka
+     * STORAGE_NON_ALCOHOL: 0=Water, 1=Cola
+     */
+    fun drinkName(processType: Int, parameterProcess1: Int): String? =
+        when (processType) {
+            STORAGE_ALCOHOL -> when (parameterProcess1) {
+                0 -> "Vodka"
+                1 -> "Rum"
+                2 -> "Goralka"
+                else -> null
+            }
+            STORAGE_NON_ALCOHOL -> when (parameterProcess1) {
+                0 -> "Water"
+                1 -> "Cola"
+                else -> null
+            }
+            else -> null
+        }
+
     /** Creates a step with given process type and param1; other fields zero. For Shaker, param1 = duration in seconds. */
     fun createStep(typeOfProcess: Int, parameterProcess1: Int, id: Int = 0, nextId: Int = 0): RecipeStep =
         RecipeStep(

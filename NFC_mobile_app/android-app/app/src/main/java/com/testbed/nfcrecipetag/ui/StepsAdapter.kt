@@ -23,11 +23,21 @@ class StepsAdapter(private val steps: List<RecipeStep>) : RecyclerView.Adapter<S
         if (Log.isLoggable("StepsAdapter", Log.DEBUG)) {
             Log.d("StepsAdapter", "Step ${position + 1}: Decoded TypeOfProcess=${s.typeOfProcess} | Displayed step type=$typeName")
         }
-        val detail = if (s.typeOfProcess == ProcessTypes.SHAKER) {
-            "${typeName} ${s.parameterProcess1} s"
-        } else {
-            "$typeName (param1=${s.parameterProcess1})"
-        }
+        val detail =
+            when (s.typeOfProcess) {
+                ProcessTypes.SHAKER ->
+                    "${typeName} ${s.parameterProcess1} s"
+                ProcessTypes.STORAGE_ALCOHOL,
+                ProcessTypes.STORAGE_NON_ALCOHOL -> {
+                    val drink = ProcessTypes.drinkName(s.typeOfProcess, s.parameterProcess1)
+                        ?: "$typeName#${s.parameterProcess1}"
+                    "$drink ${s.parameterProcess2} ml"
+                }
+                ProcessTypes.TO_STORAGE_GLASS ->
+                    "Return to storage"
+                else ->
+                    "$typeName (param1=${s.parameterProcess1}, param2=${s.parameterProcess2})"
+            }
         holder.text1.text = "Step ${position + 1}: $detail"
         holder.text2.text = "ID=${s.id} type byte=${s.typeOfProcess} ProcessCell=${s.processCellId}"
     }

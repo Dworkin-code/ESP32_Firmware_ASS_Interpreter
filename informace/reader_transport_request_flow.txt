@@ -1,0 +1,37 @@
+State_Machine task starts (main/app.c)
+-> State_Mimo_Polozena: tag detected, NFC data loaded
+-> (AAS branch) if current step TypeOfProcess != ToStorageGlass
+-> log "AAS_DECISION: REQUEST_TRANSPORT"
+-> RAF = State_Inicializace_ZiskaniAdres, RAFnext = State_Poptavka_Vyroba
+-> State_Inicializace_ZiskaniAdres: GetCellInfoFromLDS(step.TypeOfProcess)
+-> State_Poptavka_Vyroba:
+   -> GetWinningCell(..., aProcessType=step.TypeOfProcess, ...)
+   -> GetWinningCell calls Inquire(...) on candidate process cells
+   -> selected reservation returned (IDofCell, IDofReservation, Time, Price)
+   -> write ProcessCellID + ProcessCellReservationID into recipe step
+   -> if MyCellInfo.IDofCell != ProcessCellID then NeedForTransport=true
+   -> NFC_Handler_WriteSafeStep(...)
+   -> RAF = State_Poptavka_Transporty
+-> State_Poptavka_Transporty:
+   -> if NeedForTransport==false and step.TypeOfProcess!=Transport -> RAF=State_Rezervace
+   -> else transport is needed:
+      -> GetWinningCell(..., aProcessType=Transport, ...)
+      -> branch A: if ProcessCellID==Transport, param1=ParameterProcess1
+      -> branch B: else param1=ProcessCellID
+      -> param2=0, priority=false
+      -> Inquire(...) called for transport-capable cells
+      -> write TransportCellID + TransportCellReservationID + NeedForTransport=true
+      -> NFC_Handler_WriteSafeStep(...)
+      -> RAF = State_Rezervace
+-> State_Rezervace:
+   -> AskForValidOffer(...) -> GetInquireIsValid(...) -> OPC method IsValid
+   -> ReserveAllOfferedReservation(...) -> Reserve(...) -> OPC method Rezervation
+   -> reservation times written to NFC (TimeOfProcess / TimeOfTransport), then NFC_Handler_Sync(...)
+   -> RAF = State_Transport
+-> State_Transport:
+   -> if NeedForTransport==0 -> RAF=State_Vyroba_OznameniOProvedeni
+   -> else set step.IsTransport=1, budget update, write NFC
+   -> DoReservation(..., process=false) -> DoReservation_klient(...)
+   -> DoReservation_klient calls OPC method DoProcess with TransportCellReservationID
+   -> RAF = State_WaitUntilRemoved
+-> State_WaitUntilRemoved: wait until tag removed after transport

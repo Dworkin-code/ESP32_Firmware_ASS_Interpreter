@@ -5,9 +5,11 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.viewbinding.ViewBinding;
@@ -25,6 +27,12 @@ public final class ActivityEditRecipeBinding implements ViewBinding {
   public final Button btnDoneEdit;
 
   @NonNull
+  public final TextView checksumDisplay;
+
+  @NonNull
+  public final EditText editActualRecipeStep;
+
+  @NonNull
   public final EditText editBudget;
 
   @NonNull
@@ -34,20 +42,37 @@ public final class ActivityEditRecipeBinding implements ViewBinding {
   public final EditText editNumDrinks;
 
   @NonNull
+  public final EditText editParameters;
+
+  @NonNull
+  public final CheckBox editRecipeDone;
+
+  @NonNull
   public final EditText editRecipeSteps;
+
+  @NonNull
+  public final TextView rightNumberDisplay;
 
   @NonNull
   public final LinearLayout stepEditorsContainer;
 
   private ActivityEditRecipeBinding(@NonNull ScrollView rootView, @NonNull Button btnDoneEdit,
+      @NonNull TextView checksumDisplay, @NonNull EditText editActualRecipeStep,
       @NonNull EditText editBudget, @NonNull EditText editId, @NonNull EditText editNumDrinks,
-      @NonNull EditText editRecipeSteps, @NonNull LinearLayout stepEditorsContainer) {
+      @NonNull EditText editParameters, @NonNull CheckBox editRecipeDone,
+      @NonNull EditText editRecipeSteps, @NonNull TextView rightNumberDisplay,
+      @NonNull LinearLayout stepEditorsContainer) {
     this.rootView = rootView;
     this.btnDoneEdit = btnDoneEdit;
+    this.checksumDisplay = checksumDisplay;
+    this.editActualRecipeStep = editActualRecipeStep;
     this.editBudget = editBudget;
     this.editId = editId;
     this.editNumDrinks = editNumDrinks;
+    this.editParameters = editParameters;
+    this.editRecipeDone = editRecipeDone;
     this.editRecipeSteps = editRecipeSteps;
+    this.rightNumberDisplay = rightNumberDisplay;
     this.stepEditorsContainer = stepEditorsContainer;
   }
 
@@ -84,6 +109,18 @@ public final class ActivityEditRecipeBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.checksum_display;
+      TextView checksumDisplay = ViewBindings.findChildViewById(rootView, id);
+      if (checksumDisplay == null) {
+        break missingId;
+      }
+
+      id = R.id.edit_actual_recipe_step;
+      EditText editActualRecipeStep = ViewBindings.findChildViewById(rootView, id);
+      if (editActualRecipeStep == null) {
+        break missingId;
+      }
+
       id = R.id.edit_budget;
       EditText editBudget = ViewBindings.findChildViewById(rootView, id);
       if (editBudget == null) {
@@ -102,9 +139,27 @@ public final class ActivityEditRecipeBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.edit_parameters;
+      EditText editParameters = ViewBindings.findChildViewById(rootView, id);
+      if (editParameters == null) {
+        break missingId;
+      }
+
+      id = R.id.edit_recipe_done;
+      CheckBox editRecipeDone = ViewBindings.findChildViewById(rootView, id);
+      if (editRecipeDone == null) {
+        break missingId;
+      }
+
       id = R.id.edit_recipe_steps;
       EditText editRecipeSteps = ViewBindings.findChildViewById(rootView, id);
       if (editRecipeSteps == null) {
+        break missingId;
+      }
+
+      id = R.id.right_number_display;
+      TextView rightNumberDisplay = ViewBindings.findChildViewById(rootView, id);
+      if (rightNumberDisplay == null) {
         break missingId;
       }
 
@@ -114,8 +169,9 @@ public final class ActivityEditRecipeBinding implements ViewBinding {
         break missingId;
       }
 
-      return new ActivityEditRecipeBinding((ScrollView) rootView, btnDoneEdit, editBudget, editId,
-          editNumDrinks, editRecipeSteps, stepEditorsContainer);
+      return new ActivityEditRecipeBinding((ScrollView) rootView, btnDoneEdit, checksumDisplay,
+          editActualRecipeStep, editBudget, editId, editNumDrinks, editParameters, editRecipeDone,
+          editRecipeSteps, rightNumberDisplay, stepEditorsContainer);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

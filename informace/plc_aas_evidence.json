@@ -1,0 +1,181 @@
+{
+  "methods": [
+    {
+      "name": "FreeFromPosition",
+      "node_id": "ns=1;i=7000",
+      "mapping": "\"Active AAS_DB\".\"FreeFromPosition_Instance\".Method",
+      "implementation_file": "PLC_code/program_block/AAS/OPC UA Methods/FreeFromPosition.scl"
+    },
+    {
+      "name": "FreeFromQueue",
+      "node_id": "ns=1;i=7001",
+      "mapping": "\"Active AAS_DB\".\"FreeFromQueue_Instance\".Method",
+      "implementation_file": "PLC_code/program_block/AAS/OPC UA Methods/FreeFromQueue.scl"
+    },
+    {
+      "name": "GetStatus",
+      "node_id": "ns=1;i=7002",
+      "mapping": "\"Active AAS_DB\".\"GetStatus_Instance\".Method",
+      "implementation_file": "PLC_code/program_block/AAS/OPC UA Methods/GetStatus.scl"
+    },
+    {
+      "name": "GetSupported",
+      "node_id": "ns=1;i=7003",
+      "mapping": "\"Active AAS_DB\".\"GetSupported_Instance\".Method",
+      "implementation_file": "PLC_code/program_block/AAS/OPC UA Methods/GetSupported.scl"
+    },
+    {
+      "name": "ReportProduct",
+      "node_id": "ns=1;i=7004",
+      "mapping": "\"Active AAS_DB\".\"ReportProduct_Instance\".Method",
+      "implementation_file": "PLC_code/program_block/AAS/OPC UA Methods/ReportProduct.scl"
+    },
+    {
+      "name": "ReserveAction",
+      "node_id": "ns=1;i=7005",
+      "mapping": "\"Active AAS_DB\".\"ReserveAction_Instance\".Method",
+      "implementation_file": "PLC_code/program_block/AAS/OPC UA Methods/ReserveAction.scl"
+    }
+  ],
+  "files": [
+    "PLC_code/PLCSeviceProvider.xml",
+    "PLC_code/program_block/AAS/OPC UA Methods/FreeFromPosition.scl",
+    "PLC_code/program_block/AAS/OPC UA Methods/FreeFromQueue.scl",
+    "PLC_code/program_block/AAS/OPC UA Methods/GetStatus.scl",
+    "PLC_code/program_block/AAS/OPC UA Methods/GetSupported.scl",
+    "PLC_code/program_block/AAS/OPC UA Methods/ReportProduct.scl",
+    "PLC_code/program_block/AAS/OPC UA Methods/ReserveAction.scl",
+    "PLC_code/program_block/AAS/low level functions/GetMessage.scl",
+    "PLC_code/program_block/AAS/low level functions/GetPQueueStatus.scl",
+    "PLC_code/program_block/AAS/low level functions/RemoveFinishedProduct.scl",
+    "PLC_code/program_block/AAS/Passive_AAS.scl",
+    "PLC_code/program_block/Device Data/CheckAction.scl",
+    "PLC_code/program_block/Device Data/DeviceSlow.scl",
+    "PLC_code/program_block/Priority Queue functions/PQueue_find.scl",
+    "PLC_code/program_block/Priority Queue functions/PQueue_push.scl",
+    "PLC_code/program_block/Priority Queue functions/PQueue_removeByPosition.scl",
+    "PLC_code/program_block/Queue functions/Queue_find.scl",
+    "PLC_code/program_block/Queue functions/Queue_push.scl",
+    "PLC_code/program_block/AAS/Active AAS_DB.pdf",
+    "PLC_code/program_block/AAS/Passive AAS_DB.pdf",
+    "PLC_code/plc_data_types/typeOPCUAStatus.pdf",
+    "PLC_code/plc_data_types/typeOPCUAMethodhandling.pdf",
+    "PLC_code/CommBlock_DB.pdf"
+  ],
+  "blocks": [
+    "Active AAS_DB",
+    "PassiveAAS_DB",
+    "FreeFromPosition",
+    "FreeFromQueue",
+    "GetStatus",
+    "GetSupported",
+    "ReportProduct",
+    "ReserveAction",
+    "Passive_AAS",
+    "CheckAction",
+    "DeviceSlow",
+    "RemoveFinishedProduct",
+    "GetMessage",
+    "GetPQueueStatus",
+    "PQueue_find",
+    "PQueue_push",
+    "PQueue_removeByPosition",
+    "Queue_find",
+    "Queue_push",
+    "OPC_UA_ServerMethodPre",
+    "OPC_UA_ServerMethodPost"
+  ],
+  "dbs_udts": [
+    "Active AAS_DB [DB1]",
+    "PassiveAAS_DB [DB2]",
+    "CommBlock [DB20]",
+    "typeOPCUAStatus",
+    "typeOPCUAMethodhandling",
+    "typeArrayMessage",
+    "typeProductInQueue",
+    "typeArrayOfProducts",
+    "typePQueueData"
+  ],
+  "message_formats": [
+    {
+      "name": "InputMessage generic",
+      "transport_type": "UA Argument String (i=12), internally FB WString",
+      "parser": "WSTRING_TO_STRING -> GetMessage(InputMessage: String)",
+      "delimiter": "/",
+      "notes": "Positional fields, no escaped delimiter support confirmed"
+    },
+    {
+      "name": "ReserveAction request",
+      "format": "<id>/<priority>/<material>/<initialPosition_or_operation>/<finalPosition_or_operationParameter>",
+      "field_types": [
+        "DINT",
+        "UINT",
+        "INT",
+        "INT",
+        "INT"
+      ]
+    },
+    {
+      "name": "GetSupported request",
+      "format": "<unused_or_id>/<priority_bucket>/<material>/<initialPosition_or_operation>/<finalPosition_or_operationParameter>",
+      "notes": "element[1..4] are used by code; element[0] not used in current implementation"
+    },
+    {
+      "name": "Single-token requests",
+      "methods": [
+        "GetStatus",
+        "ReportProduct",
+        "FreeFromQueue",
+        "FreeFromPosition"
+      ],
+      "format": "<id_or_output_position_token>"
+    },
+    {
+      "name": "Common responses",
+      "examples": [
+        "Success",
+        "inProgress",
+        "position:<n>",
+        "support:<v>_position:<p>",
+        "Error:<hex>",
+        "Error1:<hex>_Error2:<hex>"
+      ]
+    }
+  ],
+  "states": [
+    "Method pre/post flags: done/busy/error/status",
+    "Method handling flags: UAMethod_Called/UAMethod_Result/UAMethod_Finished",
+    "DeviceSlow sequence: 0,10,20,30,40,50,60,70,80,100",
+    "ActionStatus values observed: idle, inProgress, failed",
+    "Passive queue runtime states: activeItemPosition, queueProductCount, subElementCount[]"
+  ],
+  "result_codes": [
+    "PQNoError",
+    "PQErrItemAlreadyInQueue",
+    "ErrItemNotSupported",
+    "PQErrInvalidItemId",
+    "PQErrItemNotFound",
+    "RQErrIdAlreadyKnown",
+    "PQErrItemAlreadyInProgress",
+    "PErrItemNotInPosition",
+    "PQErrBufferIsFull",
+    "PQErrWrongTypeItem",
+    "PQErrIndexInArrayLimits1",
+    "PQErrIndexInArrayLimits2",
+    "PQErrWriteEntry",
+    "OpcUa_Good"
+  ],
+  "transport_related_items": [
+    "Method ReserveAction (queue reservation)",
+    "Passive_AAS cyclic executor",
+    "CheckAction matching PQueue and RPQueue by item.id",
+    "DeviceSlow handshake with StsIdle/StsReady/StsBusy/StsDone/StsError",
+    "DeviceSlow command outputs CmdSetReady/CmdStart/CmdResetDone/CmdProductID",
+    "CommBlock DB fields Idle/Ready/Busy/Done/Error and SetReady/Start/ResetDone and ProductID"
+  ],
+  "unknowns": [
+    "Exact numeric values of status/error constants (PQErr*, PErr*, Support* bounds, QueueCountSmall, SubQueueCount, WordNumberSpaces) not confirmed from code/project files.",
+    "Exact OB/call hierarchy wiring of Active/Passive AAS blocks not confirmed from code/project files.",
+    "Exact physical IO/protocol binding of DeviceSlow status/command signals not confirmed from code/project files."
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "trigger_conditions": [
+    "main/app.c: State_Poptavka_Vyroba sets NeedForTransport=true when MyCellInfo.IDofCell != Process.IDofCell",
+    "main/app.c: State_Poptavka_Transporty enters transport inquiry unless (!NeedForTransport && TypeOfProcess != Transport)",
+    "main/app.c: AAS block routes non-ToStorageGlass steps via AAS_DECISION: REQUEST_TRANSPORT to legacy branch (State_Inicializace_ZiskaniAdres -> State_Poptavka_Vyroba)"
+  ],
+  "functions": [
+    "State_Machine (main/app.c)",
+    "GetCellInfoFromLDS (components/NFC_Recipes/NFC_recipes.c)",
+    "GetWinningCell (components/NFC_Recipes/NFC_recipes.c)",
+    "Inquire (components/OPC_Klient/OPC_klient.c)",
+    "AskForValidOffer (components/NFC_Recipes/NFC_recipes.c)",
+    "GetInquireIsValid (components/OPC_Klient/OPC_klient.c)",
+    "ReserveAllOfferedReservation (components/NFC_Recipes/NFC_recipes.c)",
+    "Reserve (components/OPC_Klient/OPC_klient.c)",
+    "DoReservation (components/NFC_Recipes/NFC_recipes.c)",
+    "DoReservation_klient (components/OPC_Klient/OPC_klient.c)",
+    "IsFinished (components/OPC_Klient/OPC_klient.c)"
+  ],
+  "files": [
+    "ESP32_Firmware_ASS_Interpreter/main/app.c",
+    "ESP32_Firmware_ASS_Interpreter/components/NFC_Recipes/NFC_recipes.c",
+    "ESP32_Firmware_ASS_Interpreter/components/NFC_Recipes/NFC_recipes.h",
+    "ESP32_Firmware_ASS_Interpreter/components/NFC_Reader/NFC_reader.h",
+    "ESP32_Firmware_ASS_Interpreter/components/OPC_Klient/OPC_klient.c"
+  ],
+  "opcua_methods": [
+    "Legacy: Inquire (UA_NODEID_STRING(1, \"Inquire\"), 5 input args)",
+    "Legacy: IsValid (UA_NODEID_STRING(1, \"IsValid\"), 1 input arg)",
+    "Legacy: Rezervation (UA_NODEID_STRING(1, \"Rezervation\"), 1 input arg)",
+    "Legacy: DoProcess (UA_NODEID_STRING(1, \"DoProcess\"), 1 input arg)",
+    "Legacy: IsFinished (UA_NODEID_STRING(1, \"IsFinished\"), 1 input arg)",
+    "AAS numeric ns=4: ReportProduct (i=7004), GetSupported (i=7003), ReserveAction (i=7005), GetStatus (i=7002), FreeFromPosition (i=7000), CurrentId write (i=6101)"
+  ],
+  "variables": [
+    "TRecipeStep.NeedForTransport",
+    "TRecipeStep.ProcessCellID",
+    "TRecipeStep.ProcessCellReservationID",
+    "TRecipeStep.TransportCellID",
+    "TRecipeStep.TransportCellReservationID",
+    "TRecipeStep.TimeOfTransport",
+    "TRecipeStep.TypeOfProcess",
+    "TRecipeStep.ParameterProcess1",
+    "TRecipeStep.ParameterProcess2",
+    "MyCellInfo.IDofCell",
+    "Reservation.IDofCell",
+    "Reservation.IDofReservation",
+    "Reservation.TimeOfReservation",
+    "Reservation.Price"
+  ],
+  "message_formats": [
+    "Legacy Inquire transport request: 5 typed OPC UA args (uint16 IDInterpreter, byte TypeOfProcess=Transport, bool priority, byte param1, uint16 param2)",
+    "AAS GetSupported/ReserveAction InputMessage: \"sr_id/priority/material/parameterA/parameterB\"",
+    "AAS ReportProduct InputMessage: decimal sr_id string"
+  ],
+  "logs": [
+    "Poptavka transportu",
+    "Je potreba transport(Aktualne %d- cil %d",
+    "Je potreba transport(%d)",
+    "Nelze vybrat transportni bunku",
+    "Zapisuji data o vyherni transportni bunce",
+    "Stav transport",
+    "Moznost provedeni transportu",
+    "Cekam nez tag zmizi po odebrani transportem",
+    "AAS_DECISION: REQUEST_TRANSPORT (TypeOfProcess=%u)",
+    "OPC_ReserveAction: InputMessage=%s",
+    "OPC_CallAasMethod(...): OutputMessage=%s"
+  ],
+  "unknowns": [
+    "Exact PLC-side meaning of Inquire param1/param2 for transport is not confirmed from code",
+    "Formal mapping of legacy reservation methods to AAS entities is not confirmed from code",
+    "Why GetWinningCell selects higher Price as winner is not confirmed from code",
+    "AskForValidReservation transport validation details are not confirmed from code (function currently TODO/returns 0)"
+  ]
+}

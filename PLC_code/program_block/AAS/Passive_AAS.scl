@@ -1,0 +1,62 @@
+
+BEGIN
+
+IF #deviceRunning THEN
+    #CheckAction_Instance(
+        priorityQueue        := #priorityQueue,
+        reportedProductsQueue := #reportedProductsQueue,
+        foundItem            => #isFoundItem,
+        item                 => #item,
+        itemPositionRP       => #itemPositionRP,
+        itemPositionP        => #itemPositionP
+    );
+END_IF;
+
+
+#DeviceSlow_Instance(
+    item            := #item,
+    itemPositionP   := #itemPositionP,
+    OutputPosition  := #OutputPosition,
+    Sr              := #Sr,
+    Valid           := #isFoundItem,
+    priorityQueue   := #priorityQueue,
+    actionStatus    := #ActionStatus,
+    deviceRunning   => #deviceRunning
+);
+
+#F_TRIG_Instance(CLK := #deviceRunning);
+#finishedProduct := #F_TRIG_Instance.Q;
+
+IF #finishedProduct THEN
+    #RemoveFinishedProduct_Instance(
+        itemPositionRP        := #itemPositionRP,
+        itemPositionP         := #itemPositionP,
+        itemId                := #item.id,
+        priorityQueue         := #priorityQueue,
+        reportedProductsQueue := #reportedProductsQueue,
+        historyBuffer         := #QueueHistoryStatus
+    );
+END_IF;
+
+
+IF #deviceRunning THEN
+    #priorityQueue.activeItemPosition := #itemPositionP;
+    #CurrentIdPosition := DINT_TO_WSTRING(#itemPositionP);
+    #CurrentId := DINT_TO_WSTRING(#item.id);
+END_IF;
+
+IF NOT #deviceRunning THEN
+    #priorityQueue.activeItemPosition := -1;
+    #CurrentIdPosition := DINT_TO_WSTRING(0);
+    #CurrentId := DINT_TO_WSTRING(0);
+END_IF;
+
+#ItemCountP := DINT_TO_WSTRING(#priorityQueue.queueProductCount);
+#ItemCountRP := DINT_TO_WSTRING(#reportedProductsQueue.staticQueueVariables.statElementCount);
+
+
+#QueueStatus := "GetPQueueStatus"(
+    subElementCount := #priorityQueue.subElementCount
+);
+
+

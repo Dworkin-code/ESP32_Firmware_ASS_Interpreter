@@ -78,11 +78,19 @@
             android:exported="false"
             android:theme="@style/Theme.NFCRecipeTag" />
         <activity
+            android:name="com.testbed.nfcrecipetag.ui.DebugRecipeActivity"
+            android:exported="false"
+            android:theme="@style/Theme.NFCRecipeTag" />
+        <activity
             android:name="com.testbed.nfcrecipetag.ui.BackupsActivity"
             android:exported="false"
             android:theme="@style/Theme.NFCRecipeTag" />
         <activity
             android:name="com.testbed.nfcrecipetag.ui.SettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.NFCRecipeTag" />
+        <activity
+            android:name="com.testbed.nfcrecipetag.ui.DebugLogActivity"
             android:exported="false"
             android:theme="@style/Theme.NFCRecipeTag" />
 
