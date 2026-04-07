@@ -50,6 +50,18 @@ typedef unsigned char byte;
 #define AAS_COMPLETION_TIMEOUT_MS 30000
 /* Re-scan guard: same sr_id within this window (ms) skips ReserveAction to avoid double call. */
 #define AAS_RESCAN_GUARD_MS 5000
+/* Cross-cell handover polling config */
+#define CROSS_CELL_STATUS_POLLS 3
+#define CROSS_CELL_STATUS_POLL_INTERVAL_MS 500
+
+/* Deterministic process-owner cell routing constants. */
+#define CELL_UNKNOWN 0
+#define CELL_SKLAD_KAPALIN 1
+#define CELL_SODAMAKER 2
+#define CELL_SHAKER 3
+#define CELL_SKLAD_ALKOHOLU 4
+#define CELL_SKLAD_SKLENICEK 5
+#define CELL_OUTPUT 6
 
 typedef struct
 {
@@ -74,6 +86,264 @@ static bool s_emptyTagLogged;
 
 /* Upper bound for RecipeSteps; tags with more are treated as empty/uninitialized. */
 #define MAX_RECIPE_STEPS 64
+
+static const char *normalize_cell_endpoint(const char *rawEndpoint, char *buffer, size_t bufferSize)
+{
+  if (!rawEndpoint || !buffer || bufferSize == 0)
+    return NULL;
+  if (strncmp(rawEndpoint, "opc.tcp://", 10) == 0)
+  {
+    snprintf(buffer, bufferSize, "%s", rawEndpoint + 10);
+  }
+  else
+  {
+    snprintf(buffer, bufferSize, "%s", rawEndpoint);
+  }
+  buffer[bufferSize - 1] = '\0';
+  return buffer;
+}
+
+static bool parse_supported_positive(const char *response)
+{
+  if (!response || response[0] == '\0')
+    return false;
+  if (strncmp(response, "Error:", 6) == 0 || strncmp(response, "error:", 6) == 0)
+    return false;
+  if (strncmp(response, "Support:", 8) == 0)
+  {
+    int value = atoi(response + 8);
+    return value > 0;
+  }
+  /* Simulation tolerance: non-error non-empty response considered supported. */
+  return true;
+}
+
+static const char *assign_local_endpoint_from_cell_id(uint16_t cellId)
+{
+  switch (cellId)
+  {
+  case 1:
+    return "192.168.168.66:4840";  // Skladkapalin
+  case 2:
+    return "192.168.168.102:4840"; // SodaMaker
+  case 3:
+    return "192.168.168.150:4840"; // Shaker
+  case 4:
+    return "192.168.168.88:4840";  // SkladAlkoholu
+  case 5:
+    return "192.168.168.63:4840";  // SkladSklenicek
+  case 6:
+    return "192.168.168.203:4840"; // DrticLedu
+  default:
+    return NULL;
+  }
+}
+
+static uint16_t resolve_owner_cell_id_from_process_type(uint8_t typeOfProcess)
+{
+  switch (typeOfProcess)
+  {
+  case ToStorageGlass:
+    return CELL_SKLAD_SKLENICEK;
+  case StorageAlcohol:
+    return CELL_SKLAD_ALKOHOLU;
+  case StorageNonAlcohol:
+    return CELL_SKLAD_KAPALIN;
+  case Shaker:
+    return CELL_SHAKER;
+  case Cleaner:
+    return CELL_SHAKER; /* Cleaning is handled by shaker-capable cell. */
+  case SodaMake:
+    return CELL_SODAMAKER;
+  case ToCustomer:
+    return CELL_OUTPUT;
+  case Transport:
+    return CELL_UNKNOWN; /* Transport is handled separately (no fixed owner). */
+  default:
+    return CELL_UNKNOWN;
+  }
+}
+
+static bool resolve_next_target_cell(const THandlerData *handler, uint16_t myCellId,
+                                     CellInfo *resolvedCell, uint8_t *resolvedStepIndex)
+{
+  if (!handler || !resolvedCell || !resolvedStepIndex || !handler->sWorkingCardInfo.TRecipeInfoLoaded ||
+      !handler->sWorkingCardInfo.TRecipeStepLoaded)
+    return false;
+  const TRecipeInfo *info = &handler->sWorkingCardInfo.sRecipeInfo;
+  uint8_t current = info->ActualRecipeStep;
+  if (current >= info->RecipeSteps)
+    return false;
+  const TRecipeStep *currentStep = &handler->sWorkingCardInfo.sRecipeStep[current];
+  uint8_t nextIndex = currentStep->NextID;
+  if (nextIndex >= info->RecipeSteps)
+  {
+    if ((current + 1U) < info->RecipeSteps)
+      nextIndex = current + 1U;
+    else
+      return false;
+  }
+  const TRecipeStep *nextStep = &handler->sWorkingCardInfo.sRecipeStep[nextIndex];
+  uint16_t candidateCount = 0;
+  CellInfo *cells = GetCellInfoFromLDS(nextStep->TypeOfProcess, &candidateCount);
+  if (!cells || candidateCount == 0)
+    return false;
+
+  bool found = false;
+  uint16_t preferredId = nextStep->ProcessCellID;
+  for (uint16_t i = 0; i < candidateCount; i++)
+  {
+    if (cells[i].IDofCell == myCellId)
+      continue;
+    if (preferredId != 0 && cells[i].IDofCell != preferredId)
+      continue;
+    *resolvedCell = cells[i];
+    found = true;
+    break;
+  }
+  if (!found)
+  {
+    for (uint16_t i = 0; i < candidateCount; i++)
+    {
+      if (cells[i].IDofCell == myCellId)
+        continue;
+      *resolvedCell = cells[i];
+      found = true;
+      break;
+    }
+  }
+  if (found)
+    *resolvedStepIndex = nextIndex;
+  DestroyCellInfoArray(cells, candidateCount);
+  return found;
+}
+
+static bool build_target_action_message(const TRecipeStep *step, const char *sr_id, uint16_t localCellId, char *outMsg, size_t outMsgSize)
+{
+  if (!step || !sr_id || !outMsg || outMsgSize == 0)
+    return false;
+  int n = snprintf(outMsg, outMsgSize, "%s/%u/%u/%u/%u", sr_id,
+                   (unsigned)localCellId,
+                   (unsigned)step->TypeOfProcess,
+                   (unsigned)step->ParameterProcess1,
+                   (unsigned)step->ParameterProcess2);
+  return (n > 0) && ((size_t)n < outMsgSize);
+}
+
+static bool build_local_aas_action_message(const TRecipeStep *step, const char *sr_id, char *outMsg, size_t outMsgSize)
+{
+  if (!step || !sr_id || !outMsg || outMsgSize == 0)
+    return false;
+  /* PLC payload contract: token0=id token1=priority token2=material/classifier token3=parameterA token4=parameterB */
+  const unsigned priority = 0U;
+  int n = snprintf(outMsg, outMsgSize, "%s/%u/%u/%u/%u", sr_id,
+                   priority,
+                   (unsigned)step->TypeOfProcess,
+                   (unsigned)step->ParameterProcess1,
+                   (unsigned)step->ParameterProcess2);
+  return (n > 0) && ((size_t)n < outMsgSize);
+}
+
+static bool poll_remote_target_status(const char *endpoint, const char *sr_id)
+{
+  if (!endpoint || !sr_id)
+    return false;
+  char statusBuf[128];
+  for (int i = 0; i < CROSS_CELL_STATUS_POLLS; i++)
+  {
+    statusBuf[0] = '\0';
+    if (OPC_GetStatus(endpoint, sr_id, statusBuf, sizeof(statusBuf)))
+    {
+      printf("[CROSS_CELL] remote GetStatus poll=%d sr_id=%s status=%s\n", i + 1, sr_id, statusBuf);
+      fflush(stdout);
+      return true;
+    }
+    vTaskDelay(CROSS_CELL_STATUS_POLL_INTERVAL_MS / portTICK_PERIOD_MS);
+  }
+  return false;
+}
+
+static bool reserve_remote_target(THandlerData *handler, const char *sr_id, uint16_t myCellId, SemaphoreHandle_t xEthernet)
+{
+  if (!handler || !sr_id || !xEthernet)
+    return false;
+
+  CellInfo targetCell;
+  uint8_t nextIndex = 0;
+  if (!resolve_next_target_cell(handler, myCellId, &targetCell, &nextIndex))
+  {
+    printf("[CROSS_CELL] local finish: next target not resolved or no remote candidate\n");
+    fflush(stdout);
+    return false;
+  }
+  const TRecipeStep *nextStep = &handler->sWorkingCardInfo.sRecipeStep[nextIndex];
+  if (targetCell.IDofCell == myCellId)
+  {
+    printf("[CROSS_CELL] skip remote reservation: resolved next cell is local (%u)\n", (unsigned)myCellId);
+    fflush(stdout);
+    return false;
+  }
+
+  char endpointBuf[96];
+  if (!normalize_cell_endpoint(targetCell.IPAdress, endpointBuf, sizeof(endpointBuf)))
+    return false;
+  char inputMsg[96];
+  if (!build_target_action_message(nextStep, sr_id, myCellId, inputMsg, sizeof(inputMsg)))
+  {
+    printf("[CROSS_CELL] failed to build InputMessage for next step\n");
+    fflush(stdout);
+    return false;
+  }
+
+  printf("[CROSS_CELL] local cell finished, localCell=%u nextCell=%u endpoint=%s step=%u type=%u\n",
+         (unsigned)myCellId, (unsigned)targetCell.IDofCell, endpointBuf, (unsigned)nextIndex, (unsigned)nextStep->TypeOfProcess);
+  printf("[CROSS_CELL] remote GetSupported request InputMessage=%s\n", inputMsg);
+  fflush(stdout);
+
+  if (xSemaphoreTake(xEthernet, (TickType_t)10000) != pdTRUE)
+  {
+    printf("[CROSS_CELL] failed: ethernet semaphore unavailable\n");
+    fflush(stdout);
+    return false;
+  }
+
+  bool success = false;
+  char outBuf[128];
+  outBuf[0] = '\0';
+  bool supportedCallOk = OPC_GetSupported(endpointBuf, inputMsg, outBuf, sizeof(outBuf));
+  bool supported = supportedCallOk && parse_supported_positive(outBuf);
+  printf("[CROSS_CELL] remote GetSupported callOk=%u response=%s\n",
+         (unsigned)supportedCallOk, outBuf[0] ? outBuf : "(empty)");
+  if (supported)
+  {
+    outBuf[0] = '\0';
+    printf("[CROSS_CELL] remote ReserveAction request InputMessage=%s\n", inputMsg);
+    bool reserveCallOk = OPC_ReserveAction(endpointBuf, inputMsg, outBuf, sizeof(outBuf));
+    bool reserveAccepted = reserveCallOk && !(strncmp(outBuf, "Error:", 6) == 0 || strncmp(outBuf, "error:", 6) == 0);
+    printf("[CROSS_CELL] remote ReserveAction callOk=%u response=%s\n",
+           (unsigned)reserveCallOk, outBuf[0] ? outBuf : "(empty)");
+    if (reserveAccepted)
+    {
+      poll_remote_target_status(endpointBuf, sr_id);
+      printf("[CROSS_CELL] remote reservation SUCCESS targetCell=%u sr_id=%s\n",
+             (unsigned)targetCell.IDofCell, sr_id);
+      success = true;
+    }
+    else
+    {
+      printf("[CROSS_CELL] remote reservation FAILED targetCell=%u sr_id=%s\n",
+             (unsigned)targetCell.IDofCell, sr_id);
+    }
+  }
+  else
+  {
+    printf("[CROSS_CELL] remote target not supported targetCell=%u sr_id=%s\n",
+           (unsigned)targetCell.IDofCell, sr_id);
+  }
+  fflush(stdout);
+  xSemaphoreGive(xEthernet);
+  return success;
+}
 
 /*
  * Returns true if the loaded recipe is considered "empty" (no recipe).
@@ -165,7 +435,6 @@ void State_Machine(void *pvParameter)
   uint16_t BunkyVelikost = 0;
   THandlerData iHandlerData;
   uint8_t Error = 0;
-  uint8_t Counter = 0;
   uint8_t ReceiptCounter = 0;
   TRecipeStep tempStep;
   Reservation Process;
@@ -368,19 +637,32 @@ void State_Machine(void *pvParameter)
                           (unsigned)step->ParameterProcess1,
                           (unsigned)step->ParameterProcess2);
 
-          if (step->TypeOfProcess == ToStorageGlass)
+          uint16_t ownerCellId = resolve_owner_cell_id_from_process_type(step->TypeOfProcess);
+          bool localProcess = (ownerCellId != 0U) && (ownerCellId == MyCellInfo.IDofCell);
+          NFC_STATE_DEBUG(GetRafName(RAF),
+                          "AAS_DECISION: TypeOfProcess=%u owner_cell_id=%u local_cell_id=%u => %s\n",
+                          (unsigned)step->TypeOfProcess,
+                          (unsigned)ownerCellId,
+                          (unsigned)MyCellInfo.IDofCell,
+                          localProcess ? "LOCAL_PROCESS" : "REQUEST_TRANSPORT");
+
+          if (localProcess)
           {
-            NFC_STATE_DEBUG(GetRafName(RAF), "AAS_DECISION: LOCAL_PLC_AAS (TypeOfProcess=ToStorageGlass)\n");
+            NFC_STATE_DEBUG(GetRafName(RAF), "AAS_DECISION: LOCAL_PROCESS\n");
             /* Build 5-field message: sr_id/priority/material/parameterA/parameterB (priority=0) */
             char msg5[80];
-            int n = snprintf(msg5, sizeof(msg5), "%s/0/%u/%u/%u", sr_id_buf,
-                             (unsigned)step->TypeOfProcess, (unsigned)step->ParameterProcess1, (unsigned)step->ParameterProcess2);
-            if (n < 0 || (size_t)n >= sizeof(msg5))
+            if (!build_local_aas_action_message(step, sr_id_buf, msg5, sizeof(msg5)))
             {
               NFC_STATE_DEBUG(GetRafName(RAF), "AAS: message build failed\n");
               RAF = State_Mimo_Polozena;
               continue;
             }
+            NFC_STATE_DEBUG(GetRafName(RAF),
+                            "AAS: local InputMessage=%s [id=%s priority=0 material=%u pA=%u pB=%u]\n",
+                            msg5, sr_id_buf,
+                            (unsigned)step->TypeOfProcess,
+                            (unsigned)step->ParameterProcess1,
+                            (unsigned)step->ParameterProcess2);
             char outBuf[128];
             outBuf[0] = '\0';
             if (xSemaphoreTake(Parametry->xEthernet, (TickType_t)10000) != pdTRUE)
@@ -392,15 +674,13 @@ void State_Machine(void *pvParameter)
             bool ok_supported = OPC_GetSupported(MyCellInfo.IPAdress, msg5, outBuf, sizeof(outBuf));
             if (ok_supported && outBuf[0] != '\0' && strncmp(outBuf, "Error:", 6) == 0)
             {
-              NFC_STATE_DEBUG(GetRafName(RAF), "AAS: GetSupported returned Error -> %s\n", outBuf);
-              iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone = true;
+              NFC_STATE_DEBUG(GetRafName(RAF),
+                              "AAS_FAIL_LOCAL: GetSupported Error response=%s -> keep step=%u pending (RecipeDone=%u)\n",
+                              outBuf,
+                              (unsigned)curStep,
+                              (unsigned)iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone);
               xSemaphoreGive(Parametry->xEthernet);
-              if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
-              {
-                NFC_Handler_WriteSafeInfo(&iHandlerData, &iHandlerData.sWorkingCardInfo.sRecipeInfo);
-                NFC_Handler_Sync(&iHandlerData);
-                xSemaphoreGive(Parametry->xNFCReader);
-              }
+              /* Do not write completion flags on local AAS request failure. Retry on next iteration. */
               RAF = State_Mimo_Polozena;
               continue;
             }
@@ -409,15 +689,14 @@ void State_Machine(void *pvParameter)
             bool ok_reserve = OPC_ReserveAction(MyCellInfo.IPAdress, msg5, outBuf, sizeof(outBuf));
             if (!ok_reserve || (outBuf[0] != '\0' && strncmp(outBuf, "Error:", 6) == 0))
             {
-              NFC_STATE_DEBUG(GetRafName(RAF), "AAS: ReserveAction failed or Error -> %s\n", outBuf);
-              iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone = true;
+              NFC_STATE_DEBUG(GetRafName(RAF),
+                              "AAS_FAIL_LOCAL: ReserveAction callOk=%u response=%s -> keep step=%u pending (RecipeDone=%u)\n",
+                              (unsigned)ok_reserve,
+                              outBuf[0] ? outBuf : "(empty)",
+                              (unsigned)curStep,
+                              (unsigned)iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone);
               xSemaphoreGive(Parametry->xEthernet);
-              if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
-              {
-                NFC_Handler_WriteSafeInfo(&iHandlerData, &iHandlerData.sWorkingCardInfo.sRecipeInfo);
-                NFC_Handler_Sync(&iHandlerData);
-                xSemaphoreGive(Parametry->xNFCReader);
-              }
+              /* Do not write completion flags on local AAS request failure. Retry on next iteration. */
               RAF = State_Mimo_Polozena;
               continue;
             }
@@ -496,8 +775,11 @@ void State_Machine(void *pvParameter)
           }
           else
           {
-            NFC_STATE_DEBUG(GetRafName(RAF), "AAS_DECISION: REQUEST_TRANSPORT (TypeOfProcess=%u)\n",
-                            (unsigned)step->TypeOfProcess);
+            NFC_STATE_DEBUG(GetRafName(RAF),
+                            "AAS_DECISION: REQUEST_TRANSPORT (TypeOfProcess=%u owner_cell_id=%u local_cell_id=%u)\n",
+                            (unsigned)step->TypeOfProcess,
+                            (unsigned)ownerCellId,
+                            (unsigned)MyCellInfo.IDofCell);
             /* Route to existing transport / production routing logic. */
             RAF = State_Inicializace_ZiskaniAdres;
             RAFnext = State_Poptavka_Vyroba;
@@ -961,6 +1243,10 @@ void State_Machine(void *pvParameter)
       case 1:
       {
         NFC_STATE_DEBUG(GetRafName(RAF), "Process je hotov\n");
+        char finishedSrId[16];
+        bool finishedHasSrId = OPC_BuildSrIdFromUid(iHandlerData.sWorkingCardInfo.sUid,
+                                                    iHandlerData.sWorkingCardInfo.sUidLength,
+                                                    finishedSrId, sizeof(finishedSrId));
         NFC_Handler_GetRecipeStep(&iHandlerData, &tempStep, iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep);
         tempStep.IsProcess = 0;
         tempStep.IsStepDone = 1;
@@ -985,6 +1271,12 @@ void State_Machine(void *pvParameter)
           ++tempInfo.NumOfDrinks;
           NFC_STATE_DEBUG(GetRafName(RAF), "Recept je hotov\n");
         }
+
+        if (!tempInfo.RecipeDone && finishedHasSrId)
+        {
+          (void)reserve_remote_target(&iHandlerData, finishedSrId, MyCellInfo.IDofCell, Parametry->xEthernet);
+        }
+
         if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
         {
           Error = NFC_Handler_WriteInfo(&iHandlerData, &tempInfo);
@@ -1172,10 +1464,19 @@ void app_main()
   nvs_get_u8(nvs_handle, "ID_Interpretter", &id_interpretter);
   MyCellInfo.IDofCell = id_interpretter;
   nvs_close(nvs_handle);
-  printf("ID_Of_Interpretter: %d\n", MyCellInfo.IDofCell);
+  printf("[BOOT] NVS loaded ID_Interpretter=%u\n", (unsigned)MyCellInfo.IDofCell);
 
-  MyCellInfo.IPAdress = "192.168.168.203:4840";
+  const char *localEndpoint = assign_local_endpoint_from_cell_id(MyCellInfo.IDofCell);
+  if (localEndpoint == NULL)
+  {
+    localEndpoint = "192.168.168.102:4840";
+    printf("[BOOT] WARN unknown cell ID=%u, fallback endpoint=%s\n",
+           (unsigned)MyCellInfo.IDofCell, localEndpoint);
+  }
+  MyCellInfo.IPAdress = localEndpoint;
   MyCellInfo.IPAdressLenght = strlen(MyCellInfo.IPAdress);
+  printf("[BOOT] Local endpoint assigned from cell ID: ID=%u endpoint=%s\n",
+         (unsigned)MyCellInfo.IDofCell, MyCellInfo.IPAdress);
   MyCellInfo.ProcessTypes = processTypes1;
   MyCellInfo.ProcessTypesLenght = 3;
 

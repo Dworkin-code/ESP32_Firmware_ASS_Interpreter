@@ -1,0 +1,6 @@
+Shaker 		ip : 192.168.168.150:4840    čtečka ID :3
+SodaMaker 	ip : 192.168.168.102:4840    čtečka ID :2
+Skladkapalin    ip : 192.168.168.66:4840     čtečka ID :1
+SkladAlkoholu 	ip : 192.168.168.88:4840     čtečka ID :4
+SkladSklenicek 	ip : 192.168.168.63:4840    čtečka ID :5
+DrticLedu 	ip : 192.168.168.203:4840    čtečka ID :6

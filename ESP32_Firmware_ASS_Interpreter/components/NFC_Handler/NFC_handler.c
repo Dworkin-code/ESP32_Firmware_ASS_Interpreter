@@ -53,18 +53,6 @@
 #define STRINGIFY(s) _STRINGIFY(s)
 #define MAX 5
 
-static uint8_t NFC_Handler_GetRetryCountForUidLen(uint8_t aUidLength)
-{
-  return (aUidLength == 7U) ? 1U : MAXERRORREADING;
-}
-
-static void NFC_Handler_LogRetryProfile(const char *aTag, uint8_t aUidLength)
-{
-  uint8_t retries = NFC_Handler_GetRetryCountForUidLen(aUidLength);
-  printf("[NFC_RETRY][%s] uid_len=%u write_safe_retries=%u sync_retries=%u writecheck_outer_retries=%u\n",
-         aTag, (unsigned)aUidLength, (unsigned)retries, (unsigned)retries, (unsigned)retries);
-}
-
 /************************************************/
 /*!
     @brief  Inicializace Handleru NFC struktury
@@ -613,13 +601,6 @@ uint8_t NFC_Handler_WriteInfo(THandlerData* aHandlerData,TRecipeInfo* aRecipeInf
 uint8_t NFC_Handler_Sync(THandlerData* aHandlerData)
 {
   static const char *TAGin = "NFC_Handler_Sync";
-  uint8_t uidLength = aHandlerData->sWorkingCardInfo.sUidLength;
-  if (uidLength == 0U)
-  {
-    uidLength = aHandlerData->sIntegrityCardInfo.sUidLength;
-  }
-  uint8_t syncRetryCount = NFC_Handler_GetRetryCountForUidLen(uidLength);
-  NFC_Handler_LogRetryProfile(TAGin, uidLength);
   uint32_t sync_fn_start_ms = esp_log_timestamp();
   NFC_HANDLER_DEBUG(TAGin, "Synchronizuji working do NFC Tagu.\n");
   printf("[NFC_TIMING][%s] enter t=%ums\n", TAGin, (unsigned)sync_fn_start_ms);
@@ -649,7 +630,7 @@ uint8_t NFC_Handler_Sync(THandlerData* aHandlerData)
     case 1:
       stejne = false;
        NFC_HANDLER_DEBUG(TAGin, "Zapisuju %d - %d\n", 0,0);
-       for (size_t i = 0; i < syncRetryCount; ++i)
+       for (size_t i = 0; i < MAXERRORREADING; ++i)
        {
         uint32_t wr_start_ms = esp_log_timestamp();
         printf("[NFC_TIMING][%s] NFC_WriteCheck start range=%u-%u retry=%u t=%lldms\n",
@@ -702,7 +683,7 @@ uint8_t NFC_Handler_Sync(THandlerData* aHandlerData)
         NFC_HANDLER_DEBUG(TAGin, "Zapisuju %d - %d\n", zacatek,konec);
         zacatekSet = false;
 
-        for (size_t j = 0; j < syncRetryCount; ++j)
+        for (size_t j = 0; j < MAXERRORREADING; ++j)
         {
           uint32_t wr_start_ms = esp_log_timestamp();
           printf("[NFC_TIMING][%s] NFC_WriteCheck start range=%u-%u retry=%u t=%lldms\n",
@@ -766,7 +747,7 @@ uint8_t NFC_Handler_Sync(THandlerData* aHandlerData)
 
 
 
-      for (size_t j = 0; j < syncRetryCount; ++j)
+      for (size_t j = 0; j < MAXERRORREADING; ++j)
         {
           uint32_t wr_start_ms = esp_log_timestamp();
           printf("[NFC_TIMING][%s] NFC_WriteCheck start range=%u-%u retry=%u t=%lldms\n",
@@ -835,13 +816,6 @@ uint8_t NFC_Handler_Sync(THandlerData* aHandlerData)
 uint8_t NFC_Handler_WriteSafeInfo(THandlerData* aHandlerData,TRecipeInfo* aRecipeInfo)
 {
   static const char *TAGin = "NFC_Handler_WriteSafeInfo";
-  uint8_t uidLength = aHandlerData->sWorkingCardInfo.sUidLength;
-  if (uidLength == 0U)
-  {
-    uidLength = aHandlerData->sIntegrityCardInfo.sUidLength;
-  }
-  uint8_t writeSafeRetryCount = NFC_Handler_GetRetryCountForUidLen(uidLength);
-  NFC_Handler_LogRetryProfile(TAGin, uidLength);
   uint32_t info_fn_start_ms = esp_log_timestamp();
   NFC_HANDLER_DEBUG(TAGin, "Zapisuji hned info do NFC tagu.\n");
   printf("[NFC_TIMING][%s] enter t=%ums\n", TAGin, (unsigned)info_fn_start_ms);
@@ -850,7 +824,7 @@ uint8_t NFC_Handler_WriteSafeInfo(THandlerData* aHandlerData,TRecipeInfo* aRecip
   aHandlerData->sIntegrityCardInfo.TRecipeInfoLoaded = true;
   aHandlerData->sIntegrityCardInfo.sRecipeInfo = *aRecipeInfo;
   uint8_t Error = 1;
-  for (size_t i = 0; i < writeSafeRetryCount; i++)
+  for (size_t i = 0; i < MAXERRORREADING; i++)
   {
     uint32_t wr_start_ms = esp_log_timestamp();
     NFC_HANDLER_ALL_DEBUG(TAGin,
