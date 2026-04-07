@@ -61,7 +61,7 @@ typedef struct __attribute__((packed))
     bool TRecipeStepLoaded;
   } TCardInfo;
 
-  static tNeopixelContext* Light;
+  extern tNeopixelContext* Light;
   static const size_t TRecipeInfo_Size = sizeof(TRecipeInfo);
   static const size_t TRecipeStep_Size = sizeof(TRecipeStep);
 

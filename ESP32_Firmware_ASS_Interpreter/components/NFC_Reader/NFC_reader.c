@@ -73,14 +73,7 @@ Možnost tisknout nazev
 #define _STRINGIFY(s) #s
 #define STRINGIFY(s) _STRINGIFY(s)
 
-static uint8_t NFC_Reader_GetWriteCheckOuterRetries(const TCardInfo *aCardInfo)
-{
-  if ((aCardInfo != NULL) && (aCardInfo->sUidLength == 7U))
-  {
-    return 1U;
-  }
-  return MAXERRORREADING;
-}
+tNeopixelContext* Light = NULL;
 
 typedef enum
 {
@@ -483,6 +476,8 @@ uint8_t NFC_WriteStructRange(pn532_t *aNFC, TCardInfo *aCardInfo, uint16_t NumOf
       size_t PosledniBunka = konec / PAGESIZE_ULTRALIGHT;
       for (int i = PrvniBunka; i <= PosledniBunka; ++i)
       {
+        uint8_t pageToWrite = (uint8_t)(i + OFFSETDATA_ULTRALIGHT);
+
         NFC_READER_ALL_DEBUG(TAGin, "Bunka c.%d:", i);
         for (size_t k = 0; k < PAGESIZE_ULTRALIGHT; k++)
         {
@@ -504,19 +499,19 @@ uint8_t NFC_WriteStructRange(pn532_t *aNFC, TCardInfo *aCardInfo, uint16_t NumOf
           }
         }
         NFC_READER_ALL_DEBUG("", "\n");
-        uint8_t Zapsano = pn532_mifareultralight_WritePage(aNFC, i + OFFSETDATA_ULTRALIGHT, iData);
+        uint8_t Zapsano = pn532_mifareultralight_WritePage(aNFC, pageToWrite, iData);
         if (!Zapsano)
         {
-          NFC_READER_ALL_DEBUG(TAGin, "LOWLEVEL WRITE FAIL medium=Ultralight page=%d chunk_i=%d\n", i + OFFSETDATA_ULTRALIGHT, i);
+          NFC_READER_ALL_DEBUG(TAGin, "LOWLEVEL WRITE FAIL medium=Ultralight page=%d chunk_i=%d\n", pageToWrite, i);
           Svetlo.rgb = NP_RGB(0, 0,  0);
           neopixel_SetPixel(*Light,&Svetlo,1);
           return 2;
         }
         uint8_t readBackData[PAGESIZE_CLASSIC];
-        uint8_t readBackOk = pn532_mifareultralight_ReadPage(aNFC, i + OFFSETDATA_ULTRALIGHT, readBackData);
+        uint8_t readBackOk = pn532_mifareultralight_ReadPage(aNFC, pageToWrite, readBackData);
         if (!readBackOk)
         {
-          NFC_READER_ALL_DEBUG(TAGin, "IMMEDIATE READBACK FAIL medium=Ultralight page=%d chunk_i=%d\n", i + OFFSETDATA_ULTRALIGHT, i);
+          NFC_READER_ALL_DEBUG(TAGin, "IMMEDIATE READBACK FAIL medium=Ultralight page=%d chunk_i=%d\n", pageToWrite, i);
         }
         else
         {
@@ -526,11 +521,11 @@ uint8_t NFC_WriteStructRange(pn532_t *aNFC, TCardInfo *aCardInfo, uint16_t NumOf
             {
               NFC_READER_ALL_DEBUG(TAGin,
                                    "IMMEDIATE READBACK MISMATCH medium=Ultralight page=%d byte_offset=%d expected=0x%02X actual=0x%02X\n",
-                                   i + OFFSETDATA_ULTRALIGHT, (int)rb, (unsigned)iData[rb], (unsigned)readBackData[rb]);
+                                   pageToWrite, (int)rb, (unsigned)iData[rb], (unsigned)readBackData[rb]);
             }
           }
         }
-        NFC_READER_ALL_DEBUG(TAGin, "LOWLEVEL WRITE OK medium=Ultralight page=%d chunk_i=%d\n", i + OFFSETDATA_ULTRALIGHT, i);
+        NFC_READER_ALL_DEBUG(TAGin, "LOWLEVEL WRITE OK medium=Ultralight page=%d chunk_i=%d\n", pageToWrite, i);
       }
     }
 
@@ -1587,13 +1582,12 @@ uint8_t NFC_WriteCheck(pn532_t *aNFC, TCardInfo *aCardInfo, uint16_t NumOfStruct
 {
   static const char *TAGin = "NFC_WriteCheck";
   uint32_t wc_start_ms = esp_log_timestamp();
-  uint8_t outerRetryCount = NFC_Reader_GetWriteCheckOuterRetries(aCardInfo);
   NFC_READER_DEBUG(TAGin, "Zapisuji hodnoty a kontroluji jestli jsou stejne od %d do %d.\n", NumOfStructureStart, NumOfStructureEnd);
   printf("[NFC_TIMING][%s] enter range=%u-%u t=%lldms\n",
          TAGin, (unsigned)NumOfStructureStart, (unsigned)NumOfStructureEnd, (long long)wc_start_ms);
   NFC_VerifyMismatch_Reset();
   uint8_t Error = 0;
-  for (int k = 0; k < outerRetryCount; ++k)
+  for (int k = 0; k < MAXERRORREADING; ++k)
   {
     for (int i = 0; i < MAXERRORREADING; ++i)
     {
@@ -1679,7 +1673,7 @@ uint8_t NFC_WriteCheck(pn532_t *aNFC, TCardInfo *aCardInfo, uint16_t NumOfStruct
       break;
     }
   }
-  NFC_READER_DEBUG(TAGin, "Data se nezapsala spravne ani po %u pokusech.\n", (unsigned)outerRetryCount);
+  NFC_READER_DEBUG(TAGin, "Data se nezapsala spravne ani po %d pokusech.\n", MAXERRORREADING);
   NFC_VerifyMismatch_Print("NFC_CheckStructArrayIsSame");
   fflush(stdout);
   printf("[NFC_TIMING][%s] exit res=1 dt_total=%ums\n", TAGin, (unsigned)(esp_log_timestamp() - wc_start_ms));
