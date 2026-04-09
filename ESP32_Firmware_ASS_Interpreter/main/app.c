@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include <esp_log.h>
 #include <esp_log_internal.h>
 #include "esp_timer.h"
@@ -53,6 +54,10 @@ typedef unsigned char byte;
 /* Cross-cell handover polling config */
 #define CROSS_CELL_STATUS_POLLS 3
 #define CROSS_CELL_STATUS_POLL_INTERVAL_MS 500
+#define SHARED_TRANSPORT_ENDPOINT "192.168.168.64:4840"
+#define TRANSPORT_PLC_ENDPOINT "opc.tcp://192.168.168.64:4840"
+#define TRANSPORT_STATUS_POLLS 3
+#define TRANSPORT_STATUS_POLL_INTERVAL_MS 500
 
 /* Deterministic process-owner cell routing constants. */
 #define CELL_UNKNOWN 0
@@ -73,6 +78,10 @@ typedef struct
   // další proměnné...
 } TaskParams;
 // static const char *TAG = "APP";
+static const char *TAG = "APP";
+#ifndef LOGI
+#define LOGI(...) ESP_LOGI(TAG, __VA_ARGS__)
+#endif
 tNeopixelContext Svetelka;
 telnet_server_config_t telnet_server_config = TELNET_SERVER_DEFAULT_CONFIG;
 CellInfo MyCellInfo;
@@ -81,27 +90,39 @@ CellInfo MyCellInfo;
 static char s_lastSeenSrId[16];
 static uint32_t s_lastActionTimestampMs;
 
+typedef enum
+{
+  TARGET_RESERVE_RESULT_SUCCESS = 0,
+  TARGET_RESERVE_RESULT_REJECTED = 1,
+  TARGET_RESERVE_RESULT_ERROR_TIMEOUT = 2
+} TargetReserveResult;
+
+typedef struct
+{
+  char sr_id[16];
+  uint8_t stepIndex;
+  uint16_t targetCellId;
+  bool targetReserved;
+} TargetTransportGate;
+
+static TargetTransportGate s_transportGate;
+typedef struct
+{
+  char sr_id[16];
+  uint8_t stepIndex;
+  bool targetReserveSuccessful;
+  bool transportRequestExecuted;
+} LegacyFlowGuard;
+
+static LegacyFlowGuard s_legacyFlowGuard;
+
 /* Empty-tag: print diagnostic block only once per tag-present; reset when card removed. */
 static bool s_emptyTagLogged;
 
 /* Upper bound for RecipeSteps; tags with more are treated as empty/uninitialized. */
 #define MAX_RECIPE_STEPS 64
 
-static const char *normalize_cell_endpoint(const char *rawEndpoint, char *buffer, size_t bufferSize)
-{
-  if (!rawEndpoint || !buffer || bufferSize == 0)
-    return NULL;
-  if (strncmp(rawEndpoint, "opc.tcp://", 10) == 0)
-  {
-    snprintf(buffer, bufferSize, "%s", rawEndpoint + 10);
-  }
-  else
-  {
-    snprintf(buffer, bufferSize, "%s", rawEndpoint);
-  }
-  buffer[bufferSize - 1] = '\0';
-  return buffer;
-}
+static uint16_t resolve_owner_cell_id_from_process_type(uint8_t typeOfProcess);
 
 static bool parse_supported_positive(const char *response)
 {
@@ -116,6 +137,135 @@ static bool parse_supported_positive(const char *response)
   }
   /* Simulation tolerance: non-error non-empty response considered supported. */
   return true;
+}
+
+static int parse_supported_value(const char *response)
+{
+  if (!response || response[0] == '\0')
+    return 0;
+  if (strncmp(response, "Support:", 8) == 0)
+    return atoi(response + 8);
+  return parse_supported_positive(response) ? 1 : 0;
+}
+
+static void transport_gate_reset(const char *reason)
+{
+  s_transportGate.sr_id[0] = '\0';
+  s_transportGate.stepIndex = 0;
+  s_transportGate.targetCellId = 0;
+  s_transportGate.targetReserved = false;
+  printf("[TRANSPORT_GATE] blocked reset reason=%s\n", reason ? reason : "unknown");
+  fflush(stdout);
+}
+
+static void transport_gate_set(const char *sr_id, uint8_t stepIndex, uint16_t targetCellId)
+{
+  if (!sr_id)
+    return;
+  snprintf(s_transportGate.sr_id, sizeof(s_transportGate.sr_id), "%s", sr_id);
+  s_transportGate.sr_id[sizeof(s_transportGate.sr_id) - 1] = '\0';
+  s_transportGate.stepIndex = stepIndex;
+  s_transportGate.targetCellId = targetCellId;
+  s_transportGate.targetReserved = true;
+  printf("[TRANSPORT_GATE] allowed sr_id=%s step=%u targetCellId=%u\n",
+         s_transportGate.sr_id,
+         (unsigned)s_transportGate.stepIndex,
+         (unsigned)s_transportGate.targetCellId);
+  fflush(stdout);
+}
+
+static void legacy_flow_guard_reset(void)
+{
+  s_legacyFlowGuard.sr_id[0] = '\0';
+  s_legacyFlowGuard.stepIndex = 0;
+  s_legacyFlowGuard.targetReserveSuccessful = false;
+  s_legacyFlowGuard.transportRequestExecuted = false;
+}
+
+static void legacy_flow_guard_mark_target_reserve_success(const char *sr_id, uint8_t stepIndex)
+{
+  if (!sr_id)
+    return;
+  snprintf(s_legacyFlowGuard.sr_id, sizeof(s_legacyFlowGuard.sr_id), "%s", sr_id);
+  s_legacyFlowGuard.sr_id[sizeof(s_legacyFlowGuard.sr_id) - 1] = '\0';
+  s_legacyFlowGuard.stepIndex = stepIndex;
+  s_legacyFlowGuard.targetReserveSuccessful = true;
+  s_legacyFlowGuard.transportRequestExecuted = false;
+}
+
+static void legacy_flow_guard_mark_transport_request_executed(const char *sr_id, uint8_t stepIndex)
+{
+  if (!sr_id)
+    return;
+  if (!s_legacyFlowGuard.targetReserveSuccessful)
+    return;
+  if (strcmp(s_legacyFlowGuard.sr_id, sr_id) != 0 || s_legacyFlowGuard.stepIndex != stepIndex)
+    return;
+  s_legacyFlowGuard.transportRequestExecuted = true;
+}
+
+static bool legacy_flow_guard_should_skip(const THandlerData *handler, uint32_t *sr_id_out, uint8_t *stepIndexOut)
+{
+  if (!handler || !sr_id_out || !stepIndexOut)
+    return false;
+  if (!handler->sWorkingCardInfo.TRecipeInfoLoaded)
+    return false;
+  if (!s_legacyFlowGuard.targetReserveSuccessful || !s_legacyFlowGuard.transportRequestExecuted)
+    return false;
+
+  char runtimeSrId[16];
+  if (!OPC_BuildSrIdFromUid(handler->sWorkingCardInfo.sUid, handler->sWorkingCardInfo.sUidLength, runtimeSrId, sizeof(runtimeSrId)))
+    return false;
+  uint8_t runtimeStepIndex = handler->sWorkingCardInfo.sRecipeInfo.ActualRecipeStep;
+  if (strcmp(s_legacyFlowGuard.sr_id, runtimeSrId) != 0 || s_legacyFlowGuard.stepIndex != runtimeStepIndex)
+    return false;
+
+  *sr_id_out = (uint32_t)strtoul(runtimeSrId, NULL, 10);
+  *stepIndexOut = runtimeStepIndex;
+  return true;
+}
+
+static uint16_t resolve_runtime_target_cell(const THandlerData *handler, uint16_t myCellId)
+{
+  if (!handler || !handler->sWorkingCardInfo.TRecipeInfoLoaded || !handler->sWorkingCardInfo.TRecipeStepLoaded)
+    return 0;
+  uint8_t stepIndex = handler->sWorkingCardInfo.sRecipeInfo.ActualRecipeStep;
+  if (stepIndex >= handler->sWorkingCardInfo.sRecipeInfo.RecipeSteps)
+    return 0;
+  const TRecipeStep *step = &handler->sWorkingCardInfo.sRecipeStep[stepIndex];
+  if (step->ProcessCellID != 0U && step->ProcessCellID != myCellId)
+    return step->ProcessCellID;
+  uint16_t ownerCellId = resolve_owner_cell_id_from_process_type(step->TypeOfProcess);
+  if (ownerCellId != 0U && ownerCellId != myCellId)
+    return ownerCellId;
+  return 0;
+}
+
+static bool transport_gate_matches_runtime(const THandlerData *handler, uint16_t myCellId)
+{
+  char runtimeSrId[16];
+  if (!OPC_BuildSrIdFromUid(handler->sWorkingCardInfo.sUid, handler->sWorkingCardInfo.sUidLength, runtimeSrId, sizeof(runtimeSrId)))
+  {
+    printf("[TRANSPORT_GATE] blocked reason=sr_id_unavailable\n");
+    fflush(stdout);
+    return false;
+  }
+  uint8_t runtimeStepIndex = handler->sWorkingCardInfo.sRecipeInfo.ActualRecipeStep;
+  uint16_t runtimeTargetCellId = resolve_runtime_target_cell(handler, myCellId);
+  bool allowed = s_transportGate.targetReserved &&
+                 (strcmp(s_transportGate.sr_id, runtimeSrId) == 0) &&
+                 (s_transportGate.stepIndex == runtimeStepIndex) &&
+                 (s_transportGate.targetCellId == runtimeTargetCellId);
+  printf("[TRANSPORT_GATE] %s sr_id=%s step=%u targetCellId=%u gate_sr_id=%s gate_step=%u gate_target=%u\n",
+         allowed ? "allowed" : "blocked",
+         runtimeSrId,
+         (unsigned)runtimeStepIndex,
+         (unsigned)runtimeTargetCellId,
+         s_transportGate.sr_id[0] ? s_transportGate.sr_id : "(empty)",
+         (unsigned)s_transportGate.stepIndex,
+         (unsigned)s_transportGate.targetCellId);
+  fflush(stdout);
+  return allowed;
 }
 
 static const char *assign_local_endpoint_from_cell_id(uint16_t cellId)
@@ -134,6 +284,27 @@ static const char *assign_local_endpoint_from_cell_id(uint16_t cellId)
     return "192.168.168.63:4840";  // SkladSklenicek
   case 6:
     return "192.168.168.203:4840"; // DrticLedu
+  default:
+    return NULL;
+  }
+}
+
+static const char *resolve_production_plc_endpoint_from_cell_id(uint8_t cellId)
+{
+  switch (cellId)
+  {
+  case 1:
+    return "opc.tcp://192.168.168.66:4840";
+  case 2:
+    return "opc.tcp://192.168.168.102:4840";
+  case 3:
+    return "opc.tcp://192.168.168.150:4840";
+  case 4:
+    return "opc.tcp://192.168.168.88:4840";
+  case 5:
+    return "opc.tcp://192.168.168.63:4840";
+  case 6:
+    return "opc.tcp://192.168.168.203:4840";
   default:
     return NULL;
   }
@@ -218,6 +389,49 @@ static bool resolve_next_target_cell(const THandlerData *handler, uint16_t myCel
   return found;
 }
 
+static bool resolve_target_cell_for_step(const THandlerData *handler, uint16_t myCellId, uint8_t stepIndex,
+                                         CellInfo *resolvedCell)
+{
+  if (!handler || !resolvedCell || !handler->sWorkingCardInfo.TRecipeInfoLoaded ||
+      !handler->sWorkingCardInfo.TRecipeStepLoaded)
+    return false;
+
+  const TRecipeInfo *info = &handler->sWorkingCardInfo.sRecipeInfo;
+  if (stepIndex >= info->RecipeSteps)
+    return false;
+
+  const TRecipeStep *step = &handler->sWorkingCardInfo.sRecipeStep[stepIndex];
+  uint16_t targetCellId = 0;
+  if (step->ProcessCellID != 0U && step->ProcessCellID != myCellId)
+    targetCellId = step->ProcessCellID;
+  else
+  {
+    uint16_t ownerCellId = resolve_owner_cell_id_from_process_type(step->TypeOfProcess);
+    if (ownerCellId != 0U && ownerCellId != myCellId)
+      targetCellId = ownerCellId;
+  }
+  if (targetCellId == 0U)
+    return false;
+
+  uint16_t candidateCount = 0;
+  CellInfo *cells = GetCellInfoFromLDS(step->TypeOfProcess, &candidateCount);
+  if (!cells || candidateCount == 0)
+    return false;
+
+  bool found = false;
+  for (uint16_t i = 0; i < candidateCount; i++)
+  {
+    if (cells[i].IDofCell == targetCellId)
+    {
+      *resolvedCell = cells[i];
+      found = true;
+      break;
+    }
+  }
+  DestroyCellInfoArray(cells, candidateCount);
+  return found;
+}
+
 static bool build_target_action_message(const TRecipeStep *step, const char *sr_id, uint16_t localCellId, char *outMsg, size_t outMsgSize)
 {
   if (!step || !sr_id || !outMsg || outMsgSize == 0)
@@ -263,46 +477,151 @@ static bool poll_remote_target_status(const char *endpoint, const char *sr_id)
   return false;
 }
 
-static bool reserve_remote_target(THandlerData *handler, const char *sr_id, uint16_t myCellId, SemaphoreHandle_t xEthernet)
+static TargetReserveResult reserve_remote_target(THandlerData *handler, const char *sr_id, uint16_t myCellId, SemaphoreHandle_t xEthernet,
+                                                 uint16_t *targetCellIdOut, uint8_t *stepIndexOut)
 {
   if (!handler || !sr_id || !xEthernet)
-    return false;
+    return TARGET_RESERVE_RESULT_ERROR_TIMEOUT;
 
   CellInfo targetCell;
-  uint8_t nextIndex = 0;
-  if (!resolve_next_target_cell(handler, myCellId, &targetCell, &nextIndex))
+  uint8_t targetStepIndex = 0;
+  bool resolved = false;
+  uint8_t currentIndex = handler->sWorkingCardInfo.sRecipeInfo.ActualRecipeStep;
+  if (resolve_target_cell_for_step(handler, myCellId, currentIndex, &targetCell))
   {
-    printf("[CROSS_CELL] local finish: next target not resolved or no remote candidate\n");
-    fflush(stdout);
-    return false;
+    targetStepIndex = currentIndex;
+    resolved = true;
   }
-  const TRecipeStep *nextStep = &handler->sWorkingCardInfo.sRecipeStep[nextIndex];
+  else
+  {
+    uint8_t nextIndex = 0;
+    if (resolve_next_target_cell(handler, myCellId, &targetCell, &nextIndex))
+    {
+      targetStepIndex = nextIndex;
+      resolved = true;
+    }
+  }
+  if (!resolved)
+  {
+    printf("TARGET_RESERVE start sr_id=%s step=0 targetCellId=0\n", sr_id);
+    printf("TARGET_RESERVE support=0 result=ERROR\n");
+    printf("[TARGET_RESERVE] targetCellId=0 support=0 reserveResult=ERROR_TIMEOUT reason=target_not_resolved\n");
+    fflush(stdout);
+    return TARGET_RESERVE_RESULT_ERROR_TIMEOUT;
+  }
+
+  const TRecipeStep *targetStep = &handler->sWorkingCardInfo.sRecipeStep[targetStepIndex];
   if (targetCell.IDofCell == myCellId)
   {
-    printf("[CROSS_CELL] skip remote reservation: resolved next cell is local (%u)\n", (unsigned)myCellId);
+    printf("TARGET_RESERVE start sr_id=%s step=%u targetCellId=%u\n",
+           sr_id, (unsigned)targetStepIndex, (unsigned)targetCell.IDofCell);
+    printf("TARGET_RESERVE support=0 result=REJECTED\n");
+    printf("[TARGET_RESERVE] targetCellId=%u support=0 reserveResult=REJECTED reason=resolved_local\n", (unsigned)targetCell.IDofCell);
     fflush(stdout);
-    return false;
+    return TARGET_RESERVE_RESULT_REJECTED;
   }
 
-  char endpointBuf[96];
-  if (!normalize_cell_endpoint(targetCell.IPAdress, endpointBuf, sizeof(endpointBuf)))
-    return false;
+  const char *endpoint = resolve_production_plc_endpoint_from_cell_id((uint8_t)targetCell.IDofCell);
+  if (!endpoint)
+    return TARGET_RESERVE_RESULT_ERROR_TIMEOUT;
   char inputMsg[96];
-  if (!build_target_action_message(nextStep, sr_id, myCellId, inputMsg, sizeof(inputMsg)))
+  if (!build_target_action_message(targetStep, sr_id, myCellId, inputMsg, sizeof(inputMsg)))
   {
-    printf("[CROSS_CELL] failed to build InputMessage for next step\n");
+    printf("TARGET_RESERVE start sr_id=%s step=%u targetCellId=%u\n",
+           sr_id, (unsigned)targetStepIndex, (unsigned)targetCell.IDofCell);
+    printf("TARGET_RESERVE support=0 result=ERROR\n");
+    printf("[TARGET_RESERVE] targetCellId=%u support=0 reserveResult=ERROR_TIMEOUT reason=input_build_failed\n",
+           (unsigned)targetCell.IDofCell);
     fflush(stdout);
-    return false;
+    return TARGET_RESERVE_RESULT_ERROR_TIMEOUT;
   }
 
+  printf("TARGET_RESERVE start sr_id=%s step=%u targetCellId=%u\n",
+         sr_id, (unsigned)targetStepIndex, (unsigned)targetCell.IDofCell);
+  printf("TARGET_RESERVE resolved endpoint=%s\n", endpoint);
   printf("[CROSS_CELL] local cell finished, localCell=%u nextCell=%u endpoint=%s step=%u type=%u\n",
-         (unsigned)myCellId, (unsigned)targetCell.IDofCell, endpointBuf, (unsigned)nextIndex, (unsigned)nextStep->TypeOfProcess);
+         (unsigned)myCellId, (unsigned)targetCell.IDofCell, endpoint, (unsigned)targetStepIndex, (unsigned)targetStep->TypeOfProcess);
   printf("[CROSS_CELL] remote GetSupported request InputMessage=%s\n", inputMsg);
   fflush(stdout);
 
   if (xSemaphoreTake(xEthernet, (TickType_t)10000) != pdTRUE)
   {
-    printf("[CROSS_CELL] failed: ethernet semaphore unavailable\n");
+    printf("TARGET_RESERVE support=0 result=ERROR\n");
+    printf("[TARGET_RESERVE] targetCellId=%u support=0 reserveResult=ERROR_TIMEOUT reason=ethernet_lock_failed\n",
+           (unsigned)targetCell.IDofCell);
+    fflush(stdout);
+    return TARGET_RESERVE_RESULT_ERROR_TIMEOUT;
+  }
+
+  TargetReserveResult result = TARGET_RESERVE_RESULT_ERROR_TIMEOUT;
+  char outBuf[128];
+  outBuf[0] = '\0';
+  bool supportedCallOk = OPC_GetSupported(endpoint, inputMsg, outBuf, sizeof(outBuf));
+  int supportValue = supportedCallOk ? parse_supported_value(outBuf) : 0;
+  bool supported = supportedCallOk && parse_supported_positive(outBuf);
+  printf("[CROSS_CELL] remote GetSupported callOk=%u response=%s supportValue=%d\n",
+         (unsigned)supportedCallOk, outBuf[0] ? outBuf : "(empty)", supportValue);
+  if (supported)
+  {
+    outBuf[0] = '\0';
+    printf("[CROSS_CELL] remote ReserveAction request InputMessage=%s\n", inputMsg);
+    bool reserveCallOk = OPC_ReserveAction(endpoint, inputMsg, outBuf, sizeof(outBuf));
+    bool reserveAccepted = reserveCallOk && !(strncmp(outBuf, "Error:", 6) == 0 || strncmp(outBuf, "error:", 6) == 0);
+    printf("[CROSS_CELL] remote ReserveAction callOk=%u response=%s\n",
+           (unsigned)reserveCallOk, outBuf[0] ? outBuf : "(empty)");
+    if (reserveAccepted)
+    {
+      poll_remote_target_status(endpoint, sr_id);
+      result = TARGET_RESERVE_RESULT_SUCCESS;
+      printf("TARGET_RESERVE support=%d result=SUCCESS\n", supportValue);
+      printf("[TARGET_RESERVE] targetCellId=%u support=%d reserveResult=SUCCESS\n",
+             (unsigned)targetCell.IDofCell, supportValue);
+    }
+    else
+    {
+      result = TARGET_RESERVE_RESULT_REJECTED;
+      printf("TARGET_RESERVE support=%d result=REJECTED\n", supportValue);
+      printf("[TARGET_RESERVE] targetCellId=%u support=%d reserveResult=REJECTED\n",
+             (unsigned)targetCell.IDofCell, supportValue);
+    }
+  }
+  else
+  {
+    result = TARGET_RESERVE_RESULT_REJECTED;
+    printf("TARGET_RESERVE support=%d result=REJECTED\n", supportValue);
+    printf("[TARGET_RESERVE] targetCellId=%u support=%d reserveResult=REJECTED reason=not_supported\n",
+           (unsigned)targetCell.IDofCell, supportValue);
+  }
+  fflush(stdout);
+  xSemaphoreGive(xEthernet);
+  if (targetCellIdOut)
+    *targetCellIdOut = targetCell.IDofCell;
+  if (stepIndexOut)
+    *stepIndexOut = targetStepIndex;
+  return result;
+}
+
+static bool request_transport_plc(const char *sr_id, uint16_t localCellId, const TRecipeStep *step, SemaphoreHandle_t xEthernet)
+{
+  if (!sr_id || !step || !xEthernet)
+    return false;
+
+  char inputMsg[96];
+  int n = snprintf(inputMsg, sizeof(inputMsg), "%s/%u/%u/%u/%u", sr_id,
+                   (unsigned)localCellId,
+                   (unsigned)step->TypeOfProcess,
+                   (unsigned)step->ParameterProcess1,
+                   (unsigned)step->ParameterProcess2);
+  if (n <= 0 || (size_t)n >= sizeof(inputMsg))
+    return false;
+
+  printf("TRANSPORT_PLC start\n");
+  printf("TRANSPORT_PLC endpoint=%s\n", TRANSPORT_PLC_ENDPOINT);
+  fflush(stdout);
+
+  if (xSemaphoreTake(xEthernet, (TickType_t)10000) != pdTRUE)
+  {
+    printf("TRANSPORT_PLC result=ERROR ethernet_lock_failed\n");
     fflush(stdout);
     return false;
   }
@@ -310,39 +629,60 @@ static bool reserve_remote_target(THandlerData *handler, const char *sr_id, uint
   bool success = false;
   char outBuf[128];
   outBuf[0] = '\0';
-  bool supportedCallOk = OPC_GetSupported(endpointBuf, inputMsg, outBuf, sizeof(outBuf));
+
+  printf("TRANSPORT_PLC GetSupported InputMessage=%s\n", inputMsg);
+  bool supportedCallOk = OPC_GetSupported(TRANSPORT_PLC_ENDPOINT, inputMsg, outBuf, sizeof(outBuf));
+  int supportValue = supportedCallOk ? parse_supported_value(outBuf) : 0;
   bool supported = supportedCallOk && parse_supported_positive(outBuf);
-  printf("[CROSS_CELL] remote GetSupported callOk=%u response=%s\n",
-         (unsigned)supportedCallOk, outBuf[0] ? outBuf : "(empty)");
-  if (supported)
+  printf("TRANSPORT_PLC GetSupported callOk=%u response=%s support=%d\n",
+         (unsigned)supportedCallOk, outBuf[0] ? outBuf : "(empty)", supportValue);
+  if (!supported)
+  {
+    printf("TRANSPORT_PLC result=REJECTED not_supported\n");
+    fflush(stdout);
+    xSemaphoreGive(xEthernet);
+    return false;
+  }
+
+  outBuf[0] = '\0';
+  printf("TRANSPORT_PLC ReserveAction InputMessage=%s\n", inputMsg);
+  bool reserveCallOk = OPC_ReserveAction(TRANSPORT_PLC_ENDPOINT, inputMsg, outBuf, sizeof(outBuf));
+  bool reserveAccepted = reserveCallOk && !(strncmp(outBuf, "Error:", 6) == 0 || strncmp(outBuf, "error:", 6) == 0);
+  printf("TRANSPORT_PLC ReserveAction callOk=%u response=%s\n",
+         (unsigned)reserveCallOk, outBuf[0] ? outBuf : "(empty)");
+  if (!reserveAccepted)
+  {
+    printf("TRANSPORT_PLC result=REJECTED reserve_failed\n");
+    fflush(stdout);
+    xSemaphoreGive(xEthernet);
+    return false;
+  }
+
+  for (int i = 0; i < TRANSPORT_STATUS_POLLS; i++)
   {
     outBuf[0] = '\0';
-    printf("[CROSS_CELL] remote ReserveAction request InputMessage=%s\n", inputMsg);
-    bool reserveCallOk = OPC_ReserveAction(endpointBuf, inputMsg, outBuf, sizeof(outBuf));
-    bool reserveAccepted = reserveCallOk && !(strncmp(outBuf, "Error:", 6) == 0 || strncmp(outBuf, "error:", 6) == 0);
-    printf("[CROSS_CELL] remote ReserveAction callOk=%u response=%s\n",
-           (unsigned)reserveCallOk, outBuf[0] ? outBuf : "(empty)");
-    if (reserveAccepted)
+    bool statusOk = OPC_GetStatus(TRANSPORT_PLC_ENDPOINT, sr_id, outBuf, sizeof(outBuf));
+    printf("TRANSPORT_PLC GetStatus poll=%d callOk=%u response=%s\n",
+           i + 1, (unsigned)statusOk, outBuf[0] ? outBuf : "(empty)");
+    if (statusOk)
     {
-      poll_remote_target_status(endpointBuf, sr_id);
-      printf("[CROSS_CELL] remote reservation SUCCESS targetCell=%u sr_id=%s\n",
-             (unsigned)targetCell.IDofCell, sr_id);
       success = true;
+      break;
     }
-    else
-    {
-      printf("[CROSS_CELL] remote reservation FAILED targetCell=%u sr_id=%s\n",
-             (unsigned)targetCell.IDofCell, sr_id);
-    }
+    vTaskDelay(TRANSPORT_STATUS_POLL_INTERVAL_MS / portTICK_PERIOD_MS);
   }
-  else
-  {
-    printf("[CROSS_CELL] remote target not supported targetCell=%u sr_id=%s\n",
-           (unsigned)targetCell.IDofCell, sr_id);
-  }
-  fflush(stdout);
+
   xSemaphoreGive(xEthernet);
-  return success;
+  if (!success)
+  {
+    printf("TRANSPORT_PLC result=ERROR status_timeout\n");
+    fflush(stdout);
+    return false;
+  }
+
+  printf("TRANSPORT_PLC result=SUCCESS\n");
+  fflush(stdout);
+  return true;
 }
 
 /*
@@ -469,6 +809,7 @@ void State_Machine(void *pvParameter)
     {
       RAF = State_Mimo_Polozena;
       s_emptyTagLogged = false;
+      legacy_flow_guard_reset();
       NFC_STATE_DEBUG(GetRafName(RAF), "Karta je odebrana\n");
       continue;
     }
@@ -597,6 +938,10 @@ void State_Machine(void *pvParameter)
         {
           /* report_ok: always run step/route check first. */
           TRecipeInfo *info = &iHandlerData.sWorkingCardInfo.sRecipeInfo;
+          if (s_transportGate.targetReserved && s_transportGate.stepIndex != info->ActualRecipeStep)
+          {
+            transport_gate_reset("step_changed");
+          }
           uint8_t curStep = info->ActualRecipeStep;
           uint8_t numSteps = info->RecipeSteps;
           bool recipeFinished = (info->RecipeDone == true) || (curStep >= numSteps);
@@ -780,9 +1125,42 @@ void State_Machine(void *pvParameter)
                             (unsigned)step->TypeOfProcess,
                             (unsigned)ownerCellId,
                             (unsigned)MyCellInfo.IDofCell);
-            /* Route to existing transport / production routing logic. */
-            RAF = State_Inicializace_ZiskaniAdres;
-            RAFnext = State_Poptavka_Vyroba;
+            uint16_t targetCellId = 0;
+            uint8_t targetStepIndex = curStep;
+            TargetReserveResult reserveResult = reserve_remote_target(&iHandlerData, sr_id_buf, MyCellInfo.IDofCell, Parametry->xEthernet,
+                                                                      &targetCellId, &targetStepIndex);
+            if (reserveResult != TARGET_RESERVE_RESULT_SUCCESS)
+            {
+              transport_gate_reset("target_reserve_failed");
+              legacy_flow_guard_reset();
+              fflush(stdout);
+              RAF = State_Mimo_Polozena;
+              continue;
+            }
+
+            transport_gate_set(sr_id_buf, targetStepIndex, targetCellId);
+            legacy_flow_guard_mark_target_reserve_success(sr_id_buf, targetStepIndex);
+            if (!transport_gate_matches_runtime(&iHandlerData, MyCellInfo.IDofCell))
+            {
+              printf("[TRANSPORT_REQUEST] skipped reason=gate_blocked endpoint=%s\n", SHARED_TRANSPORT_ENDPOINT);
+              fflush(stdout);
+              RAF = State_Mimo_Polozena;
+              continue;
+            }
+
+            if (!request_transport_plc(sr_id_buf, MyCellInfo.IDofCell, step, Parametry->xEthernet))
+            {
+              transport_gate_reset("transport_plc_failed");
+              legacy_flow_guard_reset();
+              RAF = State_Mimo_Polozena;
+              continue;
+            }
+
+            legacy_flow_guard_mark_transport_request_executed(sr_id_buf, targetStepIndex);
+            transport_gate_reset("transport_plc_success");
+            printf("TRANSPORT_PLC success -> entering State_WaitUntilRemoved\n");
+            fflush(stdout);
+            RAF = State_WaitUntilRemoved;
             continue;
           }
         }
@@ -824,6 +1202,15 @@ void State_Machine(void *pvParameter)
       }
       else if (iHandlerData.sWorkingCardInfo.sRecipeStep[iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep].TimeOfTransport > 0 && MyCellInfo.IDofCell != iHandlerData.sWorkingCardInfo.sRecipeStep[iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep].ProcessCellID)
       {
+        if (!transport_gate_matches_runtime(&iHandlerData, MyCellInfo.IDofCell))
+        {
+          printf("[TRANSPORT_REQUEST] skipped reason=gate_blocked endpoint=%s\n", SHARED_TRANSPORT_ENDPOINT);
+          fflush(stdout);
+          RAF = State_Mimo_Polozena;
+          continue;
+        }
+        printf("[TRANSPORT_REQUEST] executed reason=gate_allowed endpoint=%s\n", SHARED_TRANSPORT_ENDPOINT);
+        fflush(stdout);
         NFC_STATE_DEBUG(GetRafName(RAF), "Sklenice se objevila s rezervovanym transportem\n");
         RAF = State_Inicializace_ZiskaniAdres;
         RAFnext = State_Transport; // D
@@ -838,6 +1225,15 @@ void State_Machine(void *pvParameter)
       }
       else if (iHandlerData.sWorkingCardInfo.sRecipeStep[iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep].ProcessCellReservationID && iHandlerData.sWorkingCardInfo.sRecipeStep[iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep].NeedForTransport)
       {
+        if (!transport_gate_matches_runtime(&iHandlerData, MyCellInfo.IDofCell))
+        {
+          printf("[TRANSPORT_REQUEST] skipped reason=gate_blocked endpoint=%s\n", SHARED_TRANSPORT_ENDPOINT);
+          fflush(stdout);
+          RAF = State_Mimo_Polozena;
+          continue;
+        }
+        printf("[TRANSPORT_REQUEST] executed reason=gate_allowed endpoint=%s\n", SHARED_TRANSPORT_ENDPOINT);
+        fflush(stdout);
         NFC_STATE_DEBUG(GetRafName(RAF), "Jdu na poptani Transportu\n");
         RAF = State_Inicializace_ZiskaniAdres;
         RAFnext = State_Poptavka_Transporty; // B - Poptavka vyroba
@@ -878,6 +1274,14 @@ void State_Machine(void *pvParameter)
     }
     case State_Inicializace_ZiskaniAdres:
     {
+      uint32_t guardSrId = 0U;
+      uint8_t guardStepIndex = 0U;
+      if (legacy_flow_guard_should_skip(&iHandlerData, &guardSrId, &guardStepIndex))
+      {
+        LOGI("LEGACY_FLOW skipped due to target-first orchestration (sr_id=%" PRIu32 " step=%u)", guardSrId, (unsigned)guardStepIndex);
+        RAF = State_Mimo_Polozena;
+        continue;
+      }
       NFC_STATE_DEBUG(GetRafName(RAF), "ZiskavamAdresy potrebnych bunek(operace %d)\n", iHandlerData.sWorkingCardInfo.sRecipeStep[iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep].TypeOfProcess);
       if (Bunky != NULL)
       {
@@ -910,6 +1314,15 @@ void State_Machine(void *pvParameter)
       if (iHandlerData.sWorkingCardInfo.sRecipeStep[iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep].TypeOfProcess == Transport)
       {
         NFC_STATE_DEBUG(GetRafName(RAF), "Preskakuji poptavku vyroby, protoze operace je transport\n");
+        if (!transport_gate_matches_runtime(&iHandlerData, MyCellInfo.IDofCell))
+        {
+          printf("[TRANSPORT_REQUEST] skipped reason=gate_blocked endpoint=%s\n", SHARED_TRANSPORT_ENDPOINT);
+          fflush(stdout);
+          RAF = State_Mimo_Polozena;
+          break;
+        }
+        printf("[TRANSPORT_REQUEST] executed reason=gate_allowed endpoint=%s\n", SHARED_TRANSPORT_ENDPOINT);
+        fflush(stdout);
         RAF = State_Poptavka_Transporty;
         break;
       }
@@ -958,7 +1371,21 @@ void State_Machine(void *pvParameter)
         NFC_STATE_DEBUG(GetRafName(RAF), "Existuje skladovaci bunka\n");
         // Existuje skladovaci bunka
       }
-      RAF = State_Poptavka_Transporty; // 1
+      if (!tempStep.NeedForTransport || transport_gate_matches_runtime(&iHandlerData, MyCellInfo.IDofCell))
+      {
+        if (tempStep.NeedForTransport)
+        {
+          printf("[TRANSPORT_REQUEST] executed reason=gate_allowed endpoint=%s\n", SHARED_TRANSPORT_ENDPOINT);
+          fflush(stdout);
+        }
+        RAF = State_Poptavka_Transporty; // 1
+      }
+      else
+      {
+        printf("[TRANSPORT_REQUEST] skipped reason=gate_blocked endpoint=%s\n", SHARED_TRANSPORT_ENDPOINT);
+        fflush(stdout);
+        RAF = State_Mimo_Polozena;
+      }
       continue;
       break;
     }
@@ -977,6 +1404,15 @@ void State_Machine(void *pvParameter)
         RAF = State_Rezervace; // C
         continue;
       }
+      if (!transport_gate_matches_runtime(&iHandlerData, MyCellInfo.IDofCell))
+      {
+        printf("[TRANSPORT_REQUEST] skipped reason=gate_blocked endpoint=%s\n", SHARED_TRANSPORT_ENDPOINT);
+        fflush(stdout);
+        RAF = State_Mimo_Polozena;
+        continue;
+      }
+      printf("[TRANSPORT_REQUEST] executed reason=gate_allowed endpoint=%s\n", SHARED_TRANSPORT_ENDPOINT);
+      fflush(stdout);
       NFC_STATE_DEBUG(GetRafName(RAF), "Je potreba transport(%d)\n", iHandlerData.sWorkingCardInfo.sRecipeStep[iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep].NeedForTransport);
       if (xSemaphoreTake(Parametry->xEthernet, (TickType_t)20000) == pdTRUE)
       {
@@ -1059,6 +1495,15 @@ void State_Machine(void *pvParameter)
         RAF = State_Mimo_Polozena;
       }
       NFC_STATE_DEBUG(GetRafName(RAF), "Vse se zarezervovalo\n");
+      if (!transport_gate_matches_runtime(&iHandlerData, MyCellInfo.IDofCell))
+      {
+        printf("[TRANSPORT_REQUEST] skipped reason=gate_blocked endpoint=%s\n", SHARED_TRANSPORT_ENDPOINT);
+        fflush(stdout);
+        RAF = State_Mimo_Polozena;
+        continue;
+      }
+      printf("[TRANSPORT_REQUEST] executed reason=gate_allowed endpoint=%s\n", SHARED_TRANSPORT_ENDPOINT);
+      fflush(stdout);
       RAF = State_Transport; // L
       continue;
       break;
@@ -1123,7 +1568,17 @@ void State_Machine(void *pvParameter)
         NFC_STATE_DEBUG(GetRafName(RAF), "Nelze ziskat semafor k Ethernetu\n");
         continue;
       }
-
+      if (Error != 0)
+      {
+        printf("[TRANSPORT_REQUEST] skipped reason=transport_error endpoint=%s\n", SHARED_TRANSPORT_ENDPOINT);
+        fflush(stdout);
+        transport_gate_reset("terminal_failure");
+        RAF = State_Mimo_Polozena;
+        break;
+      }
+      printf("[TRANSPORT_REQUEST] executed reason=transport_success endpoint=%s\n", SHARED_TRANSPORT_ENDPOINT);
+      fflush(stdout);
+      transport_gate_reset("successful_transport");
       RAF = State_WaitUntilRemoved;
       break;
     }
@@ -1132,10 +1587,14 @@ void State_Machine(void *pvParameter)
 
       NFC_STATE_DEBUG(GetRafName(RAF), "State_WaitUntilRemoved entered\n");
       NFC_STATE_DEBUG(GetRafName(RAF), "Cekam nez tag zmizi po odebrani transportem\n");
+      printf("TRANSPORT_WAIT waiting for tag removal\n");
+      fflush(stdout);
 
       if (!Parametry->CardOnReader)
       {
         NFC_STATE_DEBUG(GetRafName(RAF), "Zmizel\n");
+        printf("TRANSPORT_WAIT tag disappeared\n");
+        fflush(stdout);
 
         RAF = State_Mimo_Polozena; // O
       }
@@ -1274,7 +1733,18 @@ void State_Machine(void *pvParameter)
 
         if (!tempInfo.RecipeDone && finishedHasSrId)
         {
-          (void)reserve_remote_target(&iHandlerData, finishedSrId, MyCellInfo.IDofCell, Parametry->xEthernet);
+          uint16_t targetCellId = 0;
+          uint8_t targetStepIndex = tempInfo.ActualRecipeStep;
+          TargetReserveResult reserveResult = reserve_remote_target(&iHandlerData, finishedSrId, MyCellInfo.IDofCell, Parametry->xEthernet,
+                                                                    &targetCellId, &targetStepIndex);
+          if (reserveResult == TARGET_RESERVE_RESULT_SUCCESS)
+          {
+            transport_gate_set(finishedSrId, targetStepIndex, targetCellId);
+          }
+          else
+          {
+            transport_gate_reset("target_reserve_failed");
+          }
         }
 
         if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
@@ -1467,13 +1937,16 @@ void app_main()
   printf("[BOOT] NVS loaded ID_Interpretter=%u\n", (unsigned)MyCellInfo.IDofCell);
 
   const char *localEndpoint = assign_local_endpoint_from_cell_id(MyCellInfo.IDofCell);
+  static char localEndpointBuf[64];
   if (localEndpoint == NULL)
   {
     localEndpoint = "192.168.168.102:4840";
     printf("[BOOT] WARN unknown cell ID=%u, fallback endpoint=%s\n",
            (unsigned)MyCellInfo.IDofCell, localEndpoint);
   }
-  MyCellInfo.IPAdress = localEndpoint;
+  snprintf(localEndpointBuf, sizeof(localEndpointBuf), "%s", localEndpoint);
+  localEndpointBuf[sizeof(localEndpointBuf) - 1] = '\0';
+  MyCellInfo.IPAdress = localEndpointBuf;
   MyCellInfo.IPAdressLenght = strlen(MyCellInfo.IPAdress);
   printf("[BOOT] Local endpoint assigned from cell ID: ID=%u endpoint=%s\n",
          (unsigned)MyCellInfo.IDofCell, MyCellInfo.IPAdress);

@@ -235,13 +235,18 @@ void connection_scan()
 bool ClientStart(UA_Client **iManagement_client, const char *IPAdress)
 {
     OPC_KLIENT_DEBUG(TAG, "Start OPC Klient\n");
+    if (!iManagement_client || !IPAdress)
+        return false;
 
-    /* Složení úplného endpoint URL pro open62541:
-       IPAdress = "192.168.168.63:4840"  (PLC – jediný zdroj: MyCellInfo.IPAdress v app.c)
-       endpoint = "opc.tcp://192.168.168.63:4840"
-    */
+    /* Accept both host:port and full opc.tcp:// endpoint. */
     char endpointUrl[128];
-    snprintf(endpointUrl, sizeof(endpointUrl), "opc.tcp://%s", IPAdress);
+    if (strncmp(IPAdress, "opc.tcp://", 10) == 0)
+        snprintf(endpointUrl, sizeof(endpointUrl), "%s", IPAdress);
+    else
+        snprintf(endpointUrl, sizeof(endpointUrl), "opc.tcp://%s", IPAdress);
+    endpointUrl[sizeof(endpointUrl) - 1] = '\0';
+
+    ESP_LOGI(TAG, "OPC_CONNECT using endpoint=%s", endpointUrl);
     OPC_KLIENT_DEBUG(TAG, "Pokus o pripojeni na OPC UA server: %s\n", endpointUrl);
 
     int Pocet = 1;
@@ -767,6 +772,7 @@ static bool OPC_CallAasMethod(const char *endpoint, uint32_t methodNodeId, const
 {
     if (!endpoint || !inputMessage)
         return false;
+    ESP_LOGI(TAG, "OPC_CallAasMethod endpoint=%s", endpoint);
     UA_Client *client = NULL;
     if (!ClientStart(&client, endpoint))
     {
