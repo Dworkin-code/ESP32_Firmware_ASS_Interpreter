@@ -436,6 +436,8 @@ static bool build_target_action_message(const TRecipeStep *step, const char *sr_
 {
   if (!step || !sr_id || !outMsg || outMsgSize == 0)
     return false;
+  printf("TARGET_PLC payload p2=%u\n", (unsigned)step->ParameterProcess2);
+  fflush(stdout);
   int n = snprintf(outMsg, outMsgSize, "%s/%u/%u/%u/%u", sr_id,
                    (unsigned)localCellId,
                    (unsigned)step->TypeOfProcess,
@@ -601,22 +603,42 @@ static TargetReserveResult reserve_remote_target(THandlerData *handler, const ch
   return result;
 }
 
-static bool request_transport_plc(const char *sr_id, uint16_t localCellId, const TRecipeStep *step, SemaphoreHandle_t xEthernet)
+static bool request_transport_plc(const char *sr_id, uint16_t localCellId, uint16_t targetCellId, const TRecipeStep *step, SemaphoreHandle_t xEthernet)
 {
   if (!sr_id || !step || !xEthernet)
     return false;
+  if (targetCellId == 0U)
+  {
+    printf("TRANSPORT_PLC result=ERROR target_unresolved sr_id=%s source=%u target=%u\n",
+           sr_id, (unsigned)localCellId, (unsigned)targetCellId);
+    fflush(stdout);
+    return false;
+  }
+  if (targetCellId == localCellId)
+  {
+    printf("TRANSPORT_PLC result=SKIPPED source_equals_target sr_id=%s source=%u target=%u\n",
+           sr_id, (unsigned)localCellId, (unsigned)targetCellId);
+    fflush(stdout);
+    return false;
+  }
 
   char inputMsg[96];
   int n = snprintf(inputMsg, sizeof(inputMsg), "%s/%u/%u/%u/%u", sr_id,
                    (unsigned)localCellId,
                    (unsigned)step->TypeOfProcess,
-                   (unsigned)step->ParameterProcess1,
-                   (unsigned)step->ParameterProcess2);
+                   (unsigned)localCellId,
+                   (unsigned)targetCellId);
   if (n <= 0 || (size_t)n >= sizeof(inputMsg))
     return false;
 
   printf("TRANSPORT_PLC start\n");
   printf("TRANSPORT_PLC endpoint=%s\n", TRANSPORT_PLC_ENDPOINT);
+  printf("TRANSPORT_PLC payload sr_id=%s source=%u target=%u type=%u message=%s\n",
+         sr_id,
+         (unsigned)localCellId,
+         (unsigned)targetCellId,
+         (unsigned)step->TypeOfProcess,
+         inputMsg);
   fflush(stdout);
 
   if (xSemaphoreTake(xEthernet, (TickType_t)10000) != pdTRUE)
@@ -779,7 +801,6 @@ void State_Machine(void *pvParameter)
   TRecipeStep tempStep;
   Reservation Process;
   TRecipeInfo tempInfo;
-  uint64_t ActualTime = 20;
   // static esp_netif_t NetifHandler;
   NFC_Handler_Init(&iHandlerData);
 
@@ -1114,6 +1135,49 @@ void State_Machine(void *pvParameter)
               NFC_STATE_DEBUG(GetRafName(RAF), "AAS: NFC write-back skipped, xNFCReader semaphore not acquired\n");
             }
             NFC_STATE_DEBUG(GetRafName(RAF), "AAS: step %u done, write-back OK\n", (unsigned)curStep);
+
+            uint8_t postStepIndex = iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep;
+            uint8_t postRecipeSteps = iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeSteps;
+            bool postRecipeDone = iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone || (postStepIndex >= postRecipeSteps);
+            uint8_t postTypeOfProcess = 0U;
+            uint16_t postOwnerCellId = 0U;
+
+            if (!postRecipeDone)
+            {
+              TRecipeStep *postStep = &iHandlerData.sWorkingCardInfo.sRecipeStep[postStepIndex];
+              postTypeOfProcess = postStep->TypeOfProcess;
+              postOwnerCellId = resolve_owner_cell_id_from_process_type(postTypeOfProcess);
+            }
+
+            NFC_STATE_DEBUG(GetRafName(RAF),
+                            "POST_STEP_DECISION: ActualRecipeStep=%u RecipeSteps=%u TypeOfProcess=%u\n",
+                            (unsigned)postStepIndex,
+                            (unsigned)postRecipeSteps,
+                            (unsigned)postTypeOfProcess);
+            NFC_STATE_DEBUG(GetRafName(RAF),
+                            "POST_STEP_DECISION: owner_cell_id=%u local_cell_id=%u\n",
+                            (unsigned)postOwnerCellId,
+                            (unsigned)MyCellInfo.IDofCell);
+
+            if (postRecipeDone)
+            {
+              NFC_STATE_DEBUG(GetRafName(RAF), "POST_STEP_DECISION: RECIPE_DONE\n");
+              RAF = State_WaitUntilRemoved;
+              continue;
+            }
+
+            if (postOwnerCellId != 0U && postOwnerCellId != MyCellInfo.IDofCell)
+            {
+              NFC_STATE_DEBUG(GetRafName(RAF), "POST_STEP_DECISION: NEXT_STEP_REMOTE -> REQUEST_TRANSPORT\n");
+              /*
+               * Reuse existing non-local path (target reserve + transport PLC) by
+               * re-entering State_Mimo_Polozena with updated ActualRecipeStep.
+               */
+              RAF = State_Mimo_Polozena;
+              continue;
+            }
+
+            NFC_STATE_DEBUG(GetRafName(RAF), "POST_STEP_DECISION: NEXT_STEP_LOCAL -> no transport\n");
             NFC_STATE_DEBUG(GetRafName(RAF), "AAS: transitioning to State_WaitUntilRemoved\n");
             RAF = State_WaitUntilRemoved;
             continue;
@@ -1148,7 +1212,7 @@ void State_Machine(void *pvParameter)
               continue;
             }
 
-            if (!request_transport_plc(sr_id_buf, MyCellInfo.IDofCell, step, Parametry->xEthernet))
+            if (!request_transport_plc(sr_id_buf, MyCellInfo.IDofCell, targetCellId, step, Parametry->xEthernet))
             {
               transport_gate_reset("transport_plc_failed");
               legacy_flow_guard_reset();
@@ -1200,7 +1264,8 @@ void State_Machine(void *pvParameter)
         RAFnext = State_Vyroba_Objeveni;
         continue;
       }
-      else if (iHandlerData.sWorkingCardInfo.sRecipeStep[iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep].TimeOfTransport > 0 && MyCellInfo.IDofCell != iHandlerData.sWorkingCardInfo.sRecipeStep[iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep].ProcessCellID)
+      else if (iHandlerData.sWorkingCardInfo.sRecipeStep[iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep].NeedForTransport &&
+               MyCellInfo.IDofCell != iHandlerData.sWorkingCardInfo.sRecipeStep[iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep].ProcessCellID)
       {
         if (!transport_gate_matches_runtime(&iHandlerData, MyCellInfo.IDofCell))
         {
@@ -1510,7 +1575,6 @@ void State_Machine(void *pvParameter)
     }
     case State_Transport:
     {
-      ActualTime = GetTime();
       NFC_STATE_DEBUG(GetRafName(RAF), "Stav transport\n");
       if (iHandlerData.sWorkingCardInfo.sRecipeStep[iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep].NeedForTransport == 0)
       {
@@ -1518,12 +1582,7 @@ void State_Machine(void *pvParameter)
         RAF = State_Vyroba_OznameniOProvedeni; // M
         break;
       }
-      if (ActualTime < iHandlerData.sWorkingCardInfo.sRecipeStep[iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep].TimeOfTransport && false)
-      {
-        NFC_STATE_DEBUG(GetRafName(RAF), "Jeste nezacal cas transportu Aktualni cas: %llu, Cas transportu: %llu\n", ActualTime, iHandlerData.sWorkingCardInfo.sRecipeStep[iHandlerData.sWorkingCardInfo.sRecipeInfo.ActualRecipeStep].TimeOfTransport);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        break;
-      }
+      /* Transport execution no longer waits on TimeOfTransport; transport PLC uses source/target cells. */
       if (xSemaphoreTake(Parametry->xEthernet, (TickType_t)20000) == pdTRUE)
       {
         if (AskForValidReservation(&iHandlerData, true, Bunky, BunkyVelikost) != 0 || AskForValidReservation(&iHandlerData, false, Bunky, BunkyVelikost) != 0)

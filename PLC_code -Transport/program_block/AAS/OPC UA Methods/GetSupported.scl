@@ -1,0 +1,97 @@
+﻿FUNCTION_BLOCK "GetSupported"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR 
+      OPC_UA_ServerMethodPre_Instance {InstructionName := 'OPC_UA_ServerMethodPre'; LibVersion := '1.0'} : OPC_UA_ServerMethodPre;
+      OPC_UA_ServerMethodPost_Instance {InstructionName := 'OPC_UA_ServerMethodPost'; LibVersion := '1.0'} : OPC_UA_ServerMethodPost;
+      statUAM_Status_Pre : "typeOPCUAStatus";   // UDT for OPC UA status at the start of the method.
+      statUAM_Status_Post : "typeOPCUAStatus";   // UDT for OPC UA status at the end of the method.
+      UAMethod_InParameters : Struct   // Input parameters for OPC UA method.
+         InputMessage : WString;
+      END_STRUCT;
+      UAMethod_OutParameters : Struct   // Output parameters for OPC UA method.
+         OutputMessage : WString;
+      END_STRUCT;
+   END_VAR
+
+   VAR_TEMP 
+      tempUAM_MethodHandling : "typeOPCUAMethodhandling";   // UDT for handling OPC UA methods.
+      InputArray : "typeArrayMessage";   // UDT for input message.
+      i : Int;   // Variable for 'for cycle'.
+      tmpQueuePosition : DInt;   // Temporary variable for storing queue position of a product.
+      tmpSupportValue : Int;   // Temporary variable for storing supporting value of a product.
+   END_VAR
+
+
+BEGIN
+	REGION ServerMethodPre
+	    #OPC_UA_ServerMethodPre_Instance(Done => #statUAM_Status_Pre.done,
+	                                     Busy => #statUAM_Status_Pre.busy,
+	                                     Error => #statUAM_Status_Pre.error,
+	                                     Status => #statUAM_Status_Pre.status,
+	                                     UAMethod_Called => #tempUAM_MethodHandling.UAMethod_Called,
+	                                     UAMethod_InParameters := #UAMethod_InParameters);
+	END_REGION
+	
+	REGION Method called
+	    IF #tempUAM_MethodHandling.UAMethod_Called THEN
+	        #InputArray := "GetMessage"(WSTRING_TO_STRING(#UAMethod_InParameters.InputMessage));
+	        #tmpSupportValue := 100;
+	        
+	        CASE STRING_TO_INT(#InputArray.element[2]) OF   //check material
+	            "SupportMaterialLow100".."SupportMaterialHigh100":
+	                #tmpSupportValue := #tmpSupportValue;
+	            "SupportMaterialLow60".."SupportMaterialHigh60":
+	                #tmpSupportValue := #tmpSupportValue - 40;
+	            ELSE
+	                #tmpSupportValue := 0;
+	        END_CASE;
+	        
+	        CASE STRING_TO_INT(#InputArray.element[3]) OF   //check supportA
+	            "SupportALow100".."SupportAHigh100":
+	                #tmpSupportValue := #tmpSupportValue;
+	            "SupportALow60".."SupportAHigh60":
+	                #tmpSupportValue := #tmpSupportValue - 40;
+	            ELSE
+	                #tmpSupportValue := 0;
+	        END_CASE;
+	        
+	        CASE STRING_TO_INT(#InputArray.element[4]) OF   //check supportB
+	            "SupportBLow100".."SupportBHigh100":
+	                #tmpSupportValue := #tmpSupportValue;
+	            "SupportBLow60".."SupportBHigh60":
+	                #tmpSupportValue := #tmpSupportValue - 40;
+	            ELSE
+	                #tmpSupportValue := 0;
+	        END_CASE;
+	        
+	        IF #tmpSupportValue < 0 THEN
+	            #tmpSupportValue := 0;
+	        END_IF;
+	        
+	        #tmpQueuePosition := 0;
+	        FOR #i := 0 TO STRING_TO_INT(#InputArray.element[1]) DO
+	            #tmpQueuePosition := #tmpQueuePosition + "PQueue".PQueue.subElementCount[#i];
+	        END_FOR;
+	        
+	        
+	        #UAMethod_OutParameters."OutputMessage" := CONCAT_WSTRING(IN1 := WSTRING#'support:', IN2 := DELETE(IN := DINT_TO_WSTRING(#tmpSupportValue), L := 1, P := 1));
+	        #UAMethod_OutParameters."OutputMessage" := CONCAT_WSTRING(IN1 := #UAMethod_OutParameters."OutputMessage", IN2 := WSTRING#'_position:');
+	        #UAMethod_OutParameters."OutputMessage" := CONCAT_WSTRING(IN1 := #UAMethod_OutParameters."OutputMessage", IN2 := DELETE(IN := DINT_TO_WSTRING(#tmpQueuePosition), L := 1, P := 1));
+	        
+	        #tempUAM_MethodHandling.UAMethod_Result := "OpcUa_Good";
+	        #tempUAM_MethodHandling.UAMethod_Finished := TRUE;
+	    END_IF;
+	END_REGION
+	
+	REGION ServerMethodPost
+	    #OPC_UA_ServerMethodPost_Instance(UAMethod_Result := #tempUAM_MethodHandling.UAMethod_Result,
+	                                      UAMethod_Finished := #tempUAM_MethodHandling.UAMethod_Finished,
+	                                      Done => #statUAM_Status_Post.done,
+	                                      Busy => #statUAM_Status_Post.busy,
+	                                      Error => #statUAM_Status_Post.error,
+	                                      Status => #statUAM_Status_Post.status,
+	                                      UAMethod_OutParameters := #UAMethod_OutParameters);
+	END_REGION
+END_FUNCTION_BLOCK
+

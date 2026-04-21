@@ -1,0 +1,117 @@
+﻿FUNCTION "Simulace1" : Void
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_IN_OUT 
+      SetReady : Bool;   // W1
+      Start : Bool;   // W2
+      ResetDone : Bool;   // W3
+      SetOccupied : Bool;
+      ResetOccupied : Bool;
+      Idle : Bool;   // R1
+      Ready : Bool;   // R2
+      Busy : Bool;   // R3
+      Done : Bool;   // R4
+      Error : Bool;   // R5
+      Occupied : Bool;
+   END_VAR
+
+   VAR_TEMP 
+      TransportTime_s : Int;
+   END_VAR
+
+
+BEGIN
+	//simulace
+	//IF #ResetDone THEN
+	//    #Done := 0;
+	//    #ResetDone := 0;
+	//END_IF;
+	REGION Simulace
+	    IF "Simulace".Sim_BTN  THEN                      //simulace
+	        
+	        
+	        IF #SetOccupied THEN
+	            #Occupied := 1;
+	            #SetOccupied := 0;
+	        END_IF;
+	        IF #ResetOccupied THEN
+	            #Occupied := 0;
+	            #ResetOccupied := 0;
+	        END_IF;
+	        IF #ResetDone THEN
+	            #Done := 0;
+	            #Idle := 1;
+	            #ResetDone := 0;
+	            //"CommBlock".ProductID := 0;
+	        END_IF;
+	        IF #SetReady AND #Idle THEN
+	            #SetReady := 0;
+	            #Ready := 1;
+	            #Idle := 0;
+	        END_IF;
+	        
+	        //#Error := 0;
+	        
+	        IF #Ready AND #Start THEN   // IF #ResetDone THEN
+	            #Error := 0;
+	            #TransportTime_s := 0;
+	            IF ("Simulace".Source_Cell < 1) OR ("Simulace".Source_Cell > 6) OR
+	                ("Simulace".Target_Cell < 1) OR ("Simulace".Target_Cell > 6) THEN
+	                #Error := TRUE;
+	            ELSE
+	                #TransportTime_s := "Simulace".TransportMatrix["Simulace".Source_Cell, "Simulace".Target_Cell];
+	                IF #TransportTime_s <= 0 THEN
+	                    #Error := TRUE;
+	                END_IF;
+	            END_IF;
+	            IF NOT #Error THEN
+	                "Simulace".Set_time_simulace := INT_TO_TIME(#TransportTime_s * 1000);
+	                "Simulace".Sim_start := 1;
+	                #Start := 0;
+	                #Ready := 0;
+	            ELSE
+	                #Start := 0;
+	                #Ready := 0;
+	                #Busy := 0;
+	                #Done := 0;
+	                #Idle := 0;
+	            END_IF;                     //     #ResetDone := 0;
+	        END_IF;
+	        
+	        IF "Simulace".Sim_start THEN
+	            #Idle := 0;
+	            #Busy := 1;
+	        END_IF;
+	        
+	        IF "Simulace".Sim_end THEN            //docasovani casovace -> hotova simulace
+	            #Idle := 0;
+	            #Busy := 0;
+	            #Done := 1;
+	            "Simulace".Sim_start := 0;
+	        END_IF;
+	        
+	    END_IF;
+	    
+	    "Simulace".Timer_Simulace.TON(IN := "Simulace".Sim_start,               //casovac simulace
+	    PT := "Simulace".Set_time_simulace,
+	    Q => "Simulace".Sim_end,
+	    ET => "Simulace".run_time);
+	END_REGION ;
+	
+	
+	
+	IF #Error THEN
+	    "Simulace".State_Int := 0;
+	ELSIF #Idle THEN
+	    "Simulace".State_Int  := 1;
+	ELSIF #Ready THEN
+	    "Simulace".State_Int  := 2;
+	ELSIF #Busy THEN
+	    "Simulace".State_Int  := 3;
+	ELSIF #Done THEN
+	    "Simulace".State_Int  := 4;
+	ELSE
+	    "Simulace".State_Int  := 5;
+	END_IF;
+END_FUNCTION
+

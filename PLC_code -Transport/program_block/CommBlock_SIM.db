@@ -1,0 +1,33 @@
+﻿DATA_BLOCK "CommBlock_SIM"
+{ S7_Optimized_Access := 'FALSE' }
+VERSION : 0.1
+NON_RETAIN
+   STRUCT 
+      Idle : Bool;   // Idle
+      Ready : Bool;   // Ready
+      Busy : Bool;   // Busy
+      Done : Bool;   // Done
+      Error : Bool;   // Error
+      Occupied : Bool;
+      HoldDone : Bool;
+      RequestStart : Bool;
+      SetReady : Bool;   // SetReady
+      Start : Bool;   // Start
+      ResetDone : Bool;   // ResetDone
+      SetOccupied : Bool;
+      ResetOccupied : Bool;
+      SetHold : Bool;
+      Hold : Bool;
+      RequestHold : Bool;
+      DW1 : DWord;
+      DW2 : DWord;
+      DW3 : DWord;
+      DW4 : DWord;
+      DW5 : DWord;
+   END_STRUCT;
+
+
+BEGIN
+
+END_DATA_BLOCK
+

@@ -1,0 +1,51 @@
+﻿FUNCTION "PQueue_get" : Void
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT 
+      position : DInt;   // Position for action 'get'.
+   END_VAR
+
+   VAR_OUTPUT 
+      error : Bool;   // FALSE: No error  TRUE: An error occurred during the execution of the FB.
+      status : Word;   // 16#0000-16#7FFF: Status of the FB  16#8000-16#FFFF: Error identification (see following Table).
+      subFunctionStatus : Word;   // Status or return value of called FB's, FC's and system blocks.
+      item : "typeProductInQueue";   // Returned item.
+   END_VAR
+
+   VAR_IN_OUT 
+      PQueueData : "typePQueueData";   // Priority Queue data.
+   END_VAR
+
+   VAR_TEMP 
+      i : Int;   // Variable for 'for cycle'.
+      tempTableIndex : DInt;   // Temporary index of specific table.
+      tempPosition : DInt;   // Temporary position.
+   END_VAR
+
+
+BEGIN
+	
+	REGION get
+	    #tempTableIndex := 0;
+	    #tempPosition := 0;
+	    FOR #i := 0 TO "QueueCountSmall" DO
+	        #tempPosition := #tempPosition + #PQueueData.subElementCount[#i];
+	        IF #tempPosition > #position THEN
+	            #tempPosition := #tempPosition - #PQueueData.subElementCount[#i];
+	            #tempTableIndex := #i;
+	            EXIT;
+	        END_IF;
+	    END_FOR;
+	    "Queue_get"(position := #position - #tempPosition,
+	                error => #error,
+	                status => #status,
+	                subFunctionStatus => #subFunctionStatus,
+	                item => #item,
+	                QueueData := #PQueueData.buffer[#tempTableIndex]);
+	    #tempTableIndex := #tempTableIndex;
+	    #item := #item;
+	    #item.id := #item.id;
+	END_REGION get
+	
+END_FUNCTION
+

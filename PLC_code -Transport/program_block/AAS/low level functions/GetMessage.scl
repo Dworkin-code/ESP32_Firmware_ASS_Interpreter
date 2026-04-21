@@ -1,0 +1,52 @@
+﻿FUNCTION "GetMessage" : "typeArrayMessage"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT 
+      InputMessage : String;   // Input message from client.
+   END_VAR
+
+   VAR_TEMP 
+      strLen : Int;   // Length of a string.
+      strTemp : String;   // Temporary variable to store string.
+      elementNum : Int;   // Number of elements.
+      restLen : Int;   // Length of the rest.
+      delimiterPos : Int;   // Position of delimiter.
+      elementLen : Int;   // Length of an element.
+   END_VAR
+
+
+BEGIN
+	//Function to divide incoming message into WordNumberSpaces +1 separate words
+	
+	REGION Cleanup
+	    #GetMessage.element[0] := '';
+	    FOR #elementNum := 0 TO "WordNumberSpaces" DO
+	        #GetMessage.element[#elementNum] := '';
+	    END_FOR;
+	END_REGION
+	
+	REGION Initialization
+	    #strLen := LEN(#InputMessage);
+	    #strTemp := #InputMessage;
+	    #elementNum := 0;
+	END_REGION
+	
+	
+	REGION Dividing
+	    WHILE #strLen > 0 AND #elementNum < "WordNumberSpaces" + 1 DO
+	        #delimiterPos := FIND(IN1 := #strTemp, IN2 := '/');
+	        IF #delimiterPos > 0 THEN
+	            #elementLen := #delimiterPos - 1;
+	            #GetMessage.element[#elementNum] := LEFT(IN := #strTemp, L := #elementLen);
+	            #restLen := #strLen - #delimiterPos;
+	            #strTemp := RIGHT(IN := #strTemp, L := #restLen);
+	        ELSE
+	            #GetMessage.element[#elementNum] := #strTemp;
+	            #strTemp := '';
+	        END_IF;
+	        #elementNum := #elementNum + 1;
+	        #strLen := LEN(#strTemp);
+	    END_WHILE;
+	END_REGION
+END_FUNCTION
+
