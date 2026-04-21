@@ -23,7 +23,7 @@ DeviceSlow_Instance(
     StsDone := "CommBlock".Done,
     StsError := "CommBlock".Error,
 
-    OutputPositionsr := #OutputPositionsr,
+    OutputPosition := #OutputPosition,
     Valid := #isFoundItem,
     priorityQueue := #priorityQueue,
     actionStatus := #ActionStatus,

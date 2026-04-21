@@ -1,0 +1,90 @@
+﻿FUNCTION "Queue_get" : Void
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT 
+      position : DInt;   // Position for action 'get'.
+   END_VAR
+
+   VAR_OUTPUT 
+      error : Bool;   // FALSE: No error  TRUE: An error occurred during the execution of the FB.
+      status : Word;   // 16#0000-16#7FFF: Status of the FB  16#8000-16#FFFF: Error identification (see following Table).
+      subFunctionStatus : Word;   // Status or return value of called FB's, FC's and system blocks.
+      item : "typeProductInQueue";   // Entry returned from the ring buffer.
+   END_VAR
+
+   VAR_IN_OUT 
+      QueueData : "typeArrayOfProducts";   // Queue data stored in Priority Queue.
+   END_VAR
+
+   VAR_TEMP 
+      tempInternalError : Int;   // Error information of internal checks or subfunction calls.
+      tempNewFirstItemIndex : Int;   // Variable index.
+      tempCounter : Int;   // Counter for iteration trough position in 'get'.
+   END_VAR
+
+
+BEGIN
+	
+	// Get item from the buffer.
+	REGION Validation of inputs
+	    // check whether the variable indices are within the ARRAY limits.
+	    // IF they are NOT, the program execution is terminated at this point
+	    IF (#QueueData.staticQueueVariables.statNextEmptyItemIndex >= "SubQueueCount") THEN
+	        #error := TRUE;
+	        #status := "PQErrIndexInArrayLimits1";
+	        #subFunctionStatus := "PQNoError";
+	        RETURN;
+	    ELSIF (#QueueData.staticQueueVariables.statFirstItemIndex >= "SubQueueCount") THEN
+	        #error := TRUE;
+	        #status := "PQErrIndexInArrayLimits2";
+	        #subFunctionStatus := "PQNoError";
+	        RETURN;
+	    END_IF;
+	END_REGION Validation of inputs
+	
+	REGION get
+	    // check whether the ring #buffer is empty
+	    // IF this is the CASE, program execution is terminated at this point
+	    IF (#QueueData.staticQueueVariables.statFirstItemIndex = "PQStatusBufferIsEmpty") THEN
+	        #error := true;
+	        #status := "PQErrBufferIsEmpty";
+	        #subFunctionStatus := "PQNoError";
+	        RETURN;
+	    END_IF;
+	    
+	    (*
+	    // calculate requested position
+	    #tempNewFirstItemIndex := #QueueData.staticQueueVariables.statFirstItemIndex;
+	    FOR #tempCounter := 0 TO #position - 1 DO
+	        // calculate the new index of the first entry
+	        #tempNewFirstItemIndex := #tempNewFirstItemIndex + 1;
+	        #tempNewFirstItemIndex := #tempNewFirstItemIndex MOD "SubQueueCountSmall";
+	    END_FOR;
+	    *)
+	    #tempNewFirstItemIndex := (#position + #QueueData.staticQueueVariables.statFirstItemIndex) MOD "SubQueueCount";
+	    
+	    // return the first entry of the ring buffer
+	    #tempInternalError := MOVE_BLK_VARIANT(SRC := #QueueData.product,
+	                                           COUNT := 1,
+	                                           SRC_INDEX := #tempNewFirstItemIndex,
+	                                           DEST_INDEX := 0,
+	                                           DEST => #item);
+	    
+	    // check whether a local error has occurred
+	    IF (#tempInternalError <> "PQNoError") THEN
+	        #error := TRUE;
+	        #status := "PQErrReturnFirstEntry";
+	        #subFunctionStatus := INT_TO_WORD(#tempInternalError);
+	        RETURN;
+	    END_IF;
+	END_REGION get
+	
+	REGION Writing to outputs
+	    #error := FALSE;
+	    #status := "PQNoError";
+	    #subFunctionStatus := "PQNoError";
+	END_REGION
+	
+	
+END_FUNCTION
+

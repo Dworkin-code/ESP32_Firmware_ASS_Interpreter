@@ -1,0 +1,61 @@
+﻿FUNCTION_BLOCK "CheckAction"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_OUTPUT 
+      foundItem : Bool;   // Indication, whether any item was found.
+      item : "typeProductInQueue";   // Found item.
+      itemPositionRP : DInt;   // Position of actual item in reported products queue.
+      itemPositionP : DInt;   // Position of actual item in priorit queue.
+   END_VAR
+
+   VAR_IN_OUT 
+      priorityQueue : "typePQueueData";   // Priority Queue of products registered in this SP.
+      reportedProductsQueue : "typeArrayOfProducts";   // Queue of reported proucts in SP's sphere of influence.
+   END_VAR
+
+   VAR_TEMP 
+      i : Int;   // Variable for 'for cycle'.
+      tempError : Bool;   // FALSE: No error  TRUE: An error occurred during the execution of the FB.
+      tempStatus : DInt;   // 16#0000-16#7FFF: Status of the FB  16#8000-16#FFFF: Error identification (see following Table).
+      tempSubStatus : DInt;   // Status or return value of called FB's, FC's and system blocks.
+   END_VAR
+
+
+BEGIN
+	
+	REGION CheckAction
+	    #foundItem := FALSE;
+	    FOR #i := 0 TO #priorityQueue.queueProductCount - 1 DO
+	        
+	        "PQueue_get"(position := #i,
+	                     error => #tempError,
+	                     status => #tempStatus,
+	                     subFunctionStatus => #tempSubStatus,
+	                     item => #item,
+	                     PQueueData := #priorityQueue);
+	        
+	        IF #tempError = TRUE THEN
+	            EXIT;
+	        END_IF;
+	        
+	        "Queue_find"(id := #item.id,
+	                     error => #tempError,
+	                     status => #tempStatus,
+	                     found => #foundItem,
+	                     productPosition => #itemPositionRP,
+	                     QueueData := #reportedProductsQueue);
+	                   
+	        
+	        IF #foundItem = TRUE THEN
+	            EXIT;
+	        END_IF;
+	    END_FOR;
+	END_REGION
+	
+	// Error handling on real device would be nessesary, should error occur here.
+	
+	#itemPositionP := #i;
+	
+	
+END_FUNCTION_BLOCK
+
