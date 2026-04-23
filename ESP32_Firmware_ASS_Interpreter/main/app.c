@@ -460,23 +460,11 @@ static bool build_local_aas_action_message(const TRecipeStep *step, const char *
   return (n > 0) && ((size_t)n < outMsgSize);
 }
 
-static bool poll_remote_target_status(const char *endpoint, const char *sr_id)
+static bool remote_target_is_passive_status(const char *statusResponse)
 {
-  if (!endpoint || !sr_id)
+  if (!statusResponse || statusResponse[0] == '\0')
     return false;
-  char statusBuf[128];
-  for (int i = 0; i < CROSS_CELL_STATUS_POLLS; i++)
-  {
-    statusBuf[0] = '\0';
-    if (OPC_GetStatus(endpoint, sr_id, statusBuf, sizeof(statusBuf)))
-    {
-      printf("[CROSS_CELL] remote GetStatus poll=%d sr_id=%s status=%s\n", i + 1, sr_id, statusBuf);
-      fflush(stdout);
-      return true;
-    }
-    vTaskDelay(CROSS_CELL_STATUS_POLL_INTERVAL_MS / portTICK_PERIOD_MS);
-  }
-  return false;
+  return strstr(statusResponse, "position:0") != NULL;
 }
 
 static TargetReserveResult reserve_remote_target(THandlerData *handler, const char *sr_id, uint16_t myCellId, SemaphoreHandle_t xEthernet,
@@ -486,28 +474,22 @@ static TargetReserveResult reserve_remote_target(THandlerData *handler, const ch
     return TARGET_RESERVE_RESULT_ERROR_TIMEOUT;
 
   CellInfo targetCell;
-  uint8_t targetStepIndex = 0;
-  bool resolved = false;
   uint8_t currentIndex = handler->sWorkingCardInfo.sRecipeInfo.ActualRecipeStep;
-  if (resolve_target_cell_for_step(handler, myCellId, currentIndex, &targetCell))
-  {
-    targetStepIndex = currentIndex;
-    resolved = true;
-  }
-  else
-  {
-    uint8_t nextIndex = 0;
-    if (resolve_next_target_cell(handler, myCellId, &targetCell, &nextIndex))
-    {
-      targetStepIndex = nextIndex;
-      resolved = true;
-    }
-  }
+  uint8_t targetStepIndex = currentIndex;
+  bool resolved = resolve_target_cell_for_step(handler, myCellId, currentIndex, &targetCell);
+  printf("[TARGET_RESERVE] step alignment ActualRecipeStep=%u targetStepIndex=%u chosenWritebackStep=%u\n",
+         (unsigned)currentIndex,
+         (unsigned)targetStepIndex,
+         (unsigned)targetStepIndex);
+  fflush(stdout);
   if (!resolved)
   {
-    printf("TARGET_RESERVE start sr_id=%s step=0 targetCellId=0\n", sr_id);
+    printf("TARGET_RESERVE start sr_id=%s step=%u targetCellId=0\n", sr_id, (unsigned)targetStepIndex);
     printf("TARGET_RESERVE support=0 result=ERROR\n");
-    printf("[TARGET_RESERVE] targetCellId=0 support=0 reserveResult=ERROR_TIMEOUT reason=target_not_resolved\n");
+    printf("[TARGET_RESERVE] targetCellId=0 support=0 reserveResult=ERROR_TIMEOUT reason=target_not_resolved actualStep=%u targetStepIndex=%u chosenWritebackStep=%u\n",
+           (unsigned)currentIndex,
+           (unsigned)targetStepIndex,
+           (unsigned)targetStepIndex);
     fflush(stdout);
     return TARGET_RESERVE_RESULT_ERROR_TIMEOUT;
   }
@@ -573,11 +555,38 @@ static TargetReserveResult reserve_remote_target(THandlerData *handler, const ch
            (unsigned)reserveCallOk, outBuf[0] ? outBuf : "(empty)");
     if (reserveAccepted)
     {
-      poll_remote_target_status(endpoint, sr_id);
-      result = TARGET_RESERVE_RESULT_SUCCESS;
-      printf("TARGET_RESERVE support=%d result=SUCCESS\n", supportValue);
-      printf("[TARGET_RESERVE] targetCellId=%u support=%d reserveResult=SUCCESS\n",
-             (unsigned)targetCell.IDofCell, supportValue);
+      printf("[TARGET_RESERVE] remote ReserveAction accepted rawResponse=%s\n",
+             outBuf[0] ? outBuf : "(empty)");
+      printf("[TARGET_RESERVE] polling remote GetStatus for passive confirmation\n");
+      bool passiveConfirmed = false;
+      for (int i = 0; i < CROSS_CELL_STATUS_POLLS; i++)
+      {
+        outBuf[0] = '\0';
+        bool statusOk = OPC_GetStatus(endpoint, sr_id, outBuf, sizeof(outBuf));
+        printf("[CROSS_CELL] remote GetStatus poll=%d callOk=%u response=%s\n",
+               i + 1, (unsigned)statusOk, outBuf[0] ? outBuf : "(empty)");
+        if (statusOk && remote_target_is_passive_status(outBuf))
+        {
+          passiveConfirmed = true;
+          break;
+        }
+        vTaskDelay(CROSS_CELL_STATUS_POLL_INTERVAL_MS / portTICK_PERIOD_MS);
+      }
+
+      if (passiveConfirmed)
+      {
+        result = TARGET_RESERVE_RESULT_SUCCESS;
+        printf("TARGET_RESERVE support=%d result=SUCCESS\n", supportValue);
+        printf("[TARGET_RESERVE] targetCellId=%u support=%d reserveResult=SUCCESS passive=1\n",
+               (unsigned)targetCell.IDofCell, supportValue);
+      }
+      else
+      {
+        result = TARGET_RESERVE_RESULT_REJECTED;
+        printf("TARGET_RESERVE support=%d result=REJECTED\n", supportValue);
+        printf("[TARGET_RESERVE] targetCellId=%u support=%d reserveResult=REJECTED reason=passive_not_confirmed\n",
+               (unsigned)targetCell.IDofCell, supportValue);
+      }
     }
     else
     {
@@ -650,7 +659,9 @@ static bool request_transport_plc(const char *sr_id, uint16_t localCellId, uint1
 
   bool success = false;
   char outBuf[128];
+  char reportOutBuf[128];
   outBuf[0] = '\0';
+  reportOutBuf[0] = '\0';
 
   printf("TRANSPORT_PLC GetSupported InputMessage=%s\n", inputMsg);
   bool supportedCallOk = OPC_GetSupported(TRANSPORT_PLC_ENDPOINT, inputMsg, outBuf, sizeof(outBuf));
@@ -680,13 +691,27 @@ static bool request_transport_plc(const char *sr_id, uint16_t localCellId, uint1
     return false;
   }
 
+  printf("TRANSPORT_PLC ReportProduct sr_id=%s endpoint=%s\n", sr_id, TRANSPORT_PLC_ENDPOINT);
+  bool reportCallOk = OPC_ReportProductEx(TRANSPORT_PLC_ENDPOINT, sr_id, reportOutBuf, sizeof(reportOutBuf));
+  bool reportAccepted = reportCallOk && !(strncmp(reportOutBuf, "Error:", 6) == 0 || strncmp(reportOutBuf, "error:", 6) == 0);
+  printf("TRANSPORT_PLC ReportProduct callOk=%u response=%s\n",
+         (unsigned)reportCallOk, reportOutBuf[0] ? reportOutBuf : "(empty)");
+  if (!reportAccepted)
+  {
+    printf("TRANSPORT_PLC result=REJECTED report_failed\n");
+    fflush(stdout);
+    xSemaphoreGive(xEthernet);
+    return false;
+  }
+
+  printf("TRANSPORT_PLC polling GetStatus until inProgress\n");
   for (int i = 0; i < TRANSPORT_STATUS_POLLS; i++)
   {
     outBuf[0] = '\0';
     bool statusOk = OPC_GetStatus(TRANSPORT_PLC_ENDPOINT, sr_id, outBuf, sizeof(outBuf));
     printf("TRANSPORT_PLC GetStatus poll=%d callOk=%u response=%s\n",
            i + 1, (unsigned)statusOk, outBuf[0] ? outBuf : "(empty)");
-    if (statusOk)
+    if (statusOk && strcmp(outBuf, "inProgress") == 0)
     {
       success = true;
       break;
@@ -703,6 +728,7 @@ static bool request_transport_plc(const char *sr_id, uint16_t localCellId, uint1
   }
 
   printf("TRANSPORT_PLC result=SUCCESS\n");
+  printf("TRANSPORT_PLC inProgress confirmed -> continue to wait-for-removal cycle\n");
   fflush(stdout);
   return true;
 }
@@ -1029,6 +1055,13 @@ void State_Machine(void *pvParameter)
                             (unsigned)step->TypeOfProcess,
                             (unsigned)step->ParameterProcess1,
                             (unsigned)step->ParameterProcess2);
+            bool alreadyReserved = (step->ProcessCellReservationID == MyCellInfo.IDofCell);
+            printf("[AAS_LOCAL_RESERVE_GATE] step=%u storedCell=%u localCell=%u -> %s\n",
+                   (unsigned)curStep,
+                   (unsigned)step->ProcessCellReservationID,
+                   (unsigned)MyCellInfo.IDofCell,
+                   alreadyReserved ? "SKIP" : "EXECUTE");
+            fflush(stdout);
             char outBuf[128];
             outBuf[0] = '\0';
             if (xSemaphoreTake(Parametry->xEthernet, (TickType_t)10000) != pdTRUE)
@@ -1036,40 +1069,51 @@ void State_Machine(void *pvParameter)
               NFC_STATE_DEBUG(GetRafName(RAF), "AAS: no ethernet semaphore\n");
               continue;
             }
-            /* Optional: GetSupported; if response starts with "Error:" abort step */
-            bool ok_supported = OPC_GetSupported(MyCellInfo.IPAdress, msg5, outBuf, sizeof(outBuf));
-            if (ok_supported && outBuf[0] != '\0' && strncmp(outBuf, "Error:", 6) == 0)
+            if (!alreadyReserved)
+            {
+              /* Optional: GetSupported; if response starts with "Error:" abort step */
+              bool ok_supported = OPC_GetSupported(MyCellInfo.IPAdress, msg5, outBuf, sizeof(outBuf));
+              if (ok_supported && outBuf[0] != '\0' && strncmp(outBuf, "Error:", 6) == 0)
+              {
+                NFC_STATE_DEBUG(GetRafName(RAF),
+                                "AAS_FAIL_LOCAL: GetSupported Error response=%s -> keep step=%u pending (RecipeDone=%u)\n",
+                                outBuf,
+                                (unsigned)curStep,
+                                (unsigned)iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone);
+                xSemaphoreGive(Parametry->xEthernet);
+                /* Do not write completion flags on local AAS request failure. Retry on next iteration. */
+                RAF = State_Mimo_Polozena;
+                continue;
+              }
+              /* ReserveAction */
+              outBuf[0] = '\0';
+              bool ok_reserve = OPC_ReserveAction(MyCellInfo.IPAdress, msg5, outBuf, sizeof(outBuf));
+              if (!ok_reserve || (outBuf[0] != '\0' && strncmp(outBuf, "Error:", 6) == 0))
+              {
+                NFC_STATE_DEBUG(GetRafName(RAF),
+                                "AAS_FAIL_LOCAL: ReserveAction callOk=%u response=%s -> keep step=%u pending (RecipeDone=%u)\n",
+                                (unsigned)ok_reserve,
+                                outBuf[0] ? outBuf : "(empty)",
+                                (unsigned)curStep,
+                                (unsigned)iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone);
+                xSemaphoreGive(Parametry->xEthernet);
+                /* Do not write completion flags on local AAS request failure. Retry on next iteration. */
+                RAF = State_Mimo_Polozena;
+                continue;
+              }
+              NFC_STATE_DEBUG(GetRafName(RAF), "AAS_LOCAL_RESERVE_GATE: ReserveAction executed for sr_id=%s\n", sr_id_buf);
+              /* Success: record for re-scan guard, then poll GetStatus until finished or error/timeout */
+              (void)strncpy(s_lastSeenSrId, sr_id_buf, sizeof(s_lastSeenSrId) - 1);
+              s_lastSeenSrId[sizeof(s_lastSeenSrId) - 1] = '\0';
+              s_lastActionTimestampMs = (uint32_t)pdTICKS_TO_MS(xTaskGetTickCount());
+            }
+            else
             {
               NFC_STATE_DEBUG(GetRafName(RAF),
-                              "AAS_FAIL_LOCAL: GetSupported Error response=%s -> keep step=%u pending (RecipeDone=%u)\n",
-                              outBuf,
-                              (unsigned)curStep,
-                              (unsigned)iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone);
-              xSemaphoreGive(Parametry->xEthernet);
-              /* Do not write completion flags on local AAS request failure. Retry on next iteration. */
-              RAF = State_Mimo_Polozena;
-              continue;
+                              "AAS_LOCAL_RESERVE_GATE: ReserveAction skipped for sr_id=%s, using existing ProcessCellReservationID=%u\n",
+                              sr_id_buf,
+                              (unsigned)step->ProcessCellReservationID);
             }
-            /* ReserveAction */
-            outBuf[0] = '\0';
-            bool ok_reserve = OPC_ReserveAction(MyCellInfo.IPAdress, msg5, outBuf, sizeof(outBuf));
-            if (!ok_reserve || (outBuf[0] != '\0' && strncmp(outBuf, "Error:", 6) == 0))
-            {
-              NFC_STATE_DEBUG(GetRafName(RAF),
-                              "AAS_FAIL_LOCAL: ReserveAction callOk=%u response=%s -> keep step=%u pending (RecipeDone=%u)\n",
-                              (unsigned)ok_reserve,
-                              outBuf[0] ? outBuf : "(empty)",
-                              (unsigned)curStep,
-                              (unsigned)iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeDone);
-              xSemaphoreGive(Parametry->xEthernet);
-              /* Do not write completion flags on local AAS request failure. Retry on next iteration. */
-              RAF = State_Mimo_Polozena;
-              continue;
-            }
-            /* Success: record for re-scan guard, then poll GetStatus until finished or error/timeout */
-            (void)strncpy(s_lastSeenSrId, sr_id_buf, sizeof(s_lastSeenSrId) - 1);
-            s_lastSeenSrId[sizeof(s_lastSeenSrId) - 1] = '\0';
-            s_lastActionTimestampMs = (uint32_t)pdTICKS_TO_MS(xTaskGetTickCount());
             bool completion_ok = OPC_AAS_WaitCompletionPoll(MyCellInfo.IPAdress, sr_id_buf, (uint32_t)AAS_COMPLETION_TIMEOUT_MS, 500);
             xSemaphoreGive(Parametry->xEthernet);
             if (!completion_ok)
@@ -1200,6 +1244,46 @@ void State_Machine(void *pvParameter)
               fflush(stdout);
               RAF = State_Mimo_Polozena;
               continue;
+            }
+
+            if (targetStepIndex < iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeSteps && targetCellId != 0U)
+            {
+              TRecipeStep *targetStepForWriteback = &iHandlerData.sWorkingCardInfo.sRecipeStep[targetStepIndex];
+              targetStepForWriteback->ProcessCellReservationID = targetCellId;
+              printf("[TARGET_RESERVE] marker writeback ActualRecipeStep=%u targetStepIndex=%u chosenWritebackStep=%u markerValue=%u\n",
+                     (unsigned)curStep,
+                     (unsigned)targetStepIndex,
+                     (unsigned)targetStepIndex,
+                     (unsigned)targetStepForWriteback->ProcessCellReservationID);
+              printf("[TARGET_RESERVE] marker set ProcessCellReservationID=%u\n",
+                     (unsigned)targetStepForWriteback->ProcessCellReservationID);
+              fflush(stdout);
+
+              uint8_t writeStepRes = 255U;
+              uint8_t syncRes = 255U;
+              if (xSemaphoreTake(Parametry->xNFCReader, (TickType_t)10000) == pdTRUE)
+              {
+                writeStepRes = NFC_Handler_WriteSafeStep(&iHandlerData, targetStepForWriteback, targetStepIndex);
+                syncRes = NFC_Handler_Sync(&iHandlerData);
+                xSemaphoreGive(Parametry->xNFCReader);
+              }
+              else
+              {
+                printf("[TARGET_RESERVE] NFC writeback skipped, xNFCReader semaphore not acquired\n");
+              }
+              printf("[TARGET_RESERVE] NFC writeback result step=%u writeSafeStep=%u sync=%u\n",
+                     (unsigned)targetStepIndex,
+                     (unsigned)writeStepRes,
+                     (unsigned)syncRes);
+              fflush(stdout);
+            }
+            else
+            {
+              printf("[TARGET_RESERVE] ProcessCellReservationID not persisted step=%u targetCellId=%u recipeSteps=%u\n",
+                     (unsigned)targetStepIndex,
+                     (unsigned)targetCellId,
+                     (unsigned)iHandlerData.sWorkingCardInfo.sRecipeInfo.RecipeSteps);
+              fflush(stdout);
             }
 
             transport_gate_set(sr_id_buf, targetStepIndex, targetCellId);
